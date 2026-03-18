@@ -134,6 +134,28 @@ const normalizeGramsReport = (value, fallback = '10gms') => {
   if (value === undefined || value === null || value === '') return fallback;
   return value === '5gms' ? '5gms' : '10gms';
 };
+const isFinalPassVisibleEntry = (entry = {}) => {
+  const workflow = String(entry.workflowStatus || '').toUpperCase();
+  const decision = String(entry.lotSelectionDecision || '').toUpperCase();
+  const cookingStatus = String(entry.cookingReport?.status || '').toUpperCase();
+  const hasResampleHistory = Boolean(entry.resampleStartAt) || Number(entry.qualityReportAttempts || 0) > 1;
+
+  if (workflow === 'FAILED' || decision === 'SOLDOUT') return false;
+
+  if (decision === 'FAIL') {
+    return ['STAFF_ENTRY', 'QUALITY_CHECK', 'COOKING_REPORT', 'LOT_SELECTION', 'FINAL_REPORT', 'LOT_ALLOTMENT'].includes(workflow);
+  }
+
+  if (hasResampleHistory && decision === 'PASS_WITH_COOKING') {
+    return ['QUALITY_CHECK', 'COOKING_REPORT', 'LOT_SELECTION', 'FINAL_REPORT', 'LOT_ALLOTMENT'].includes(workflow);
+  }
+
+  if (workflow === 'FINAL_REPORT') return true;
+
+  return workflow === 'LOT_SELECTION'
+    && decision === 'PASS_WITH_COOKING'
+    && ['PASS', 'MEDIUM'].includes(cookingStatus);
+};
 // ------------------------------------------
 const getRecheckState = async (sampleEntryId, qualityUpdatedAt, cookingUpdatedAt, qualitySnapshot = null, cookingSnapshot = null) => {
   try {
@@ -903,6 +925,16 @@ router.get('/tabs/final-pass-lots', authenticateToken, cacheMiddleware(15), asyn
           },
           {
             [Op.and]: [
+              {
+                workflowStatus: {
+                  [Op.in]: ['QUALITY_CHECK', 'COOKING_REPORT', 'LOT_SELECTION', 'FINAL_REPORT', 'LOT_ALLOTMENT']
+                }
+              },
+              { lotSelectionDecision: 'PASS_WITH_COOKING' }
+            ]
+          },
+          {
+            [Op.and]: [
               { lotSelectionDecision: 'FAIL' },
               {
                 // Re-sample BEFORE final should stay visible in Final Pass Lots.
@@ -1042,8 +1074,10 @@ router.get('/tabs/final-pass-lots', authenticateToken, cacheMiddleware(15), asyn
         }
         return !(state && state.recheckRequested);
       });
+      await attachLoadingLotsHistories(filteredRows);
+      const visibleRows = filteredRows.filter((row) => isFinalPassVisibleEntry(row?.toJSON ? row.toJSON() : row));
 
-      const response = formatCursorResponse(filteredRows, paginationQuery.limit, null, {
+      const response = formatCursorResponse(visibleRows, paginationQuery.limit, null, {
         fields: SAMPLE_ENTRY_CURSOR_FIELDS
       });
       return res.json({ entries: response.data, pagination: response.pagination });
@@ -1073,13 +1107,15 @@ router.get('/tabs/final-pass-lots', authenticateToken, cacheMiddleware(15), asyn
       }
       return !(state && state.recheckRequested);
     });
+    await attachLoadingLotsHistories(filteredRows);
+    const visibleRows = filteredRows.filter((row) => isFinalPassVisibleEntry(row?.toJSON ? row.toJSON() : row));
 
     return res.json({
-      entries: filteredRows,
-      total: count,
+      entries: visibleRows,
+      total: visibleRows.length,
       page: parseInt(page, 10),
       pageSize: parseInt(pageSize, 10),
-      totalPages: Math.max(1, Math.ceil(count / Math.max(1, parseInt(pageSize, 10) || 100)))
+      totalPages: Math.max(1, Math.ceil(visibleRows.length / Math.max(1, parseInt(pageSize, 10) || 100)))
     });
   } catch (error) {
     console.error('Error getting final pass lots:', error);

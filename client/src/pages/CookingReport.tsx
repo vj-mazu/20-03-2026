@@ -23,7 +23,9 @@ interface SampleEntry {
   sampleGivenToOffice?: boolean;
   lotSelectionDecision?: string;
   lotSelectionAt?: string;
+  resampleStartAt?: string;
   qualityReportAttempts?: number;
+  qualityAttemptDetails?: any[];
   creator?: { id: number; username: string; fullName?: string };
   qualityParameters?: {
     grainsCount?: number;
@@ -183,6 +185,37 @@ const hasQualitySnapshot = (attempt: any) => {
 
   return hasMoisture && (hasGrains || hasDetailedQuality);
 };
+const normalizeAttemptValue = (value: any) => {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string') return value.trim();
+  return String(value);
+};
+const areQualityAttemptsEquivalent = (left: any, right: any) => {
+  const keys = [
+    'reportedBy',
+    'moistureRaw', 'moisture',
+    'dryMoistureRaw', 'dryMoisture',
+    'cutting1Raw', 'cutting1', 'cutting2Raw', 'cutting2',
+    'bend1Raw', 'bend1', 'bend2Raw', 'bend2',
+    'grainsCountRaw', 'grainsCount',
+    'mixRaw', 'mix', 'mixSRaw', 'mixS', 'mixLRaw', 'mixL',
+    'kanduRaw', 'kandu', 'oilRaw', 'oil', 'skRaw', 'sk',
+    'wbRRaw', 'wbR', 'wbBkRaw', 'wbBk', 'wbTRaw', 'wbT',
+    'paddyWbRaw', 'paddyWb',
+    'gramsReport', 'smellHas', 'smellType'
+  ];
+  return keys.every((key) => normalizeAttemptValue(left?.[key]) === normalizeAttemptValue(right?.[key]));
+};
+const isResampleWorkflowEntry = (entry: any) => {
+  const baseAttempts = Array.isArray(entry?.qualityAttemptDetails)
+    ? entry.qualityAttemptDetails.filter(Boolean)
+    : [];
+  const decision = String(entry?.lotSelectionDecision || '').toUpperCase();
+  return decision === 'FAIL'
+    || Boolean(entry?.resampleStartAt)
+    || baseAttempts.length > 1
+    || Number(entry?.qualityReportAttempts || 0) > 1;
+};
 const getQualityAttemptsForEntry = (entry: any) => {
   const baseAttempts = Array.isArray(entry?.qualityAttemptDetails)
     ? [...entry.qualityAttemptDetails].filter(Boolean).sort((a: any, b: any) => (a.attemptNo || 0) - (b.attemptNo || 0))
@@ -192,23 +225,15 @@ const getQualityAttemptsForEntry = (entry: any) => {
   if (!currentQuality) return baseAttempts;
   if (baseAttempts.length === 0) return hasQualitySnapshot(currentQuality) ? [currentQuality] : [];
 
-  const latestStoredAttempt = baseAttempts[baseAttempts.length - 1];
-  const latestStoredTs = getTimeValue(latestStoredAttempt?.updatedAt || latestStoredAttempt?.createdAt || null);
-  const currentQualityTs = getTimeValue(currentQuality.updatedAt || currentQuality.createdAt || null);
-  const lotSelectionTs = getTimeValue(entry?.lotSelectionAt || null);
-  const isResampleFlow = String(entry?.lotSelectionDecision || '').toUpperCase() === 'FAIL'
-    || String(entry?.lotSelectionDecision || '').toUpperCase() === 'PASS_WITH_COOKING'
-    || baseAttempts.length > 1
-    || (Number(entry?.qualityReportAttempts) > 1);
+  const isResampleFlow = isResampleWorkflowEntry(entry);
   const currentAlreadyIncluded = baseAttempts.some((a: any) =>
     (a.id && currentQuality.id && String(a.id) === String(currentQuality.id))
-    || (currentQualityTs > 0 && latestStoredTs > 0 && currentQualityTs === latestStoredTs)
+    || areQualityAttemptsEquivalent(a, currentQuality)
   );
   const shouldAppendCurrentQuality =
     hasQualitySnapshot(currentQuality) &&
     isResampleFlow &&
-    !currentAlreadyIncluded &&
-    currentQualityTs > 0;
+    !currentAlreadyIncluded;
 
   if (!shouldAppendCurrentQuality) return baseAttempts;
 
@@ -240,41 +265,45 @@ const getEntrySmellLabel = (entry: any) => {
 };
 
 const splitHistoryByResampleStart = (entry: SampleEntry, history: any[]) => {
-  const startAt = getTimeValue(entry.lotSelectionAt);
-  if (!startAt || !Array.isArray(history) || history.length === 0) {
+  const attempts = getQualityAttemptsForEntry(entry);
+  const resampleCycleCount = Math.max(attempts.length - 1, 0);
+  if (!isResampleWorkflowEntry(entry) || resampleCycleCount <= 0 || !Array.isArray(history) || history.length === 0) {
     return { before: history || [], after: history || [], hasSplit: false };
   }
 
-  const before = history.filter((item: any) => getTimeValue(item?.date) < startAt);
-  const after = history.filter((item: any) => getTimeValue(item?.date) >= startAt);
-  return { before, after, hasSplit: true };
+  let completedCycles = 0;
+  let splitIndex = -1;
+  history.forEach((item: any, index: number) => {
+    if (splitIndex >= 0) return;
+    const statusKey = String(item?.status || '').toUpperCase();
+    if (!['PASS', 'MEDIUM', 'FAIL'].includes(statusKey)) return;
+    completedCycles += 1;
+    if (completedCycles === resampleCycleCount) {
+      splitIndex = index + 1;
+    }
+  });
+
+  if (splitIndex < 0) {
+    return { before: [], after: history, hasSplit: false };
+  }
+
+  return {
+    before: history.slice(0, splitIndex),
+    after: history.slice(splitIndex),
+    hasSplit: true
+  };
 };
 const hasCurrentCycleQualityData = (entry: SampleEntry) => {
-  const lotSelectionAt = getTimeValue(entry.lotSelectionAt);
-  if (!lotSelectionAt) return false;
-  const attempts = Array.isArray((entry as any).qualityAttemptDetails) ? (entry as any).qualityAttemptDetails : [];
-  const hasCurrentCycleAttempt = attempts.some((attempt: any) => {
-    const attemptAt = getTimeValue(attempt?.updatedAt || attempt?.createdAt || null);
-    if (attemptAt < lotSelectionAt) return false;
-    return !!(
-      attempt?.reportedBy
-      || attempt?.id
-      || attempt?.grainsCount
-      || attempt?.grainsCountRaw
-      || attempt?.moisture
-      || attempt?.moistureRaw
-    );
-  });
-  if (hasCurrentCycleAttempt) return true;
-  const quality = entry.qualityParameters as any;
-  if (!quality) return false;
-  const qualityAt = getTimeValue(quality.updatedAt || quality.createdAt || null);
-  return qualityAt >= lotSelectionAt;
+  const attempts = getQualityAttemptsForEntry(entry);
+  if (attempts.length === 0) return false;
+  if (!isResampleWorkflowEntry(entry)) return hasQualitySnapshot(attempts[attempts.length - 1]);
+  if (attempts.length <= 1) return false;
+  return hasQualitySnapshot(attempts[attempts.length - 1]);
 };
 const getCurrentCycleCookingHistory = (entry: SampleEntry, history: any[]) => {
-  if (entry.lotSelectionDecision !== 'FAIL') return history;
+  if (!isResampleWorkflowEntry(entry)) return history;
   const { after, hasSplit } = splitHistoryByResampleStart(entry, history);
-  return hasSplit ? after : history;
+  return hasSplit ? after : [];
 };
 
 const getSamplingLabel = (attemptNo: number) => {
@@ -285,16 +314,11 @@ const getSamplingLabel = (attemptNo: number) => {
 };
 
 const isResolvedResampleEntry = (entry: SampleEntry) => {
-  if (entry.lotSelectionDecision !== 'FAIL') return false;
+  if (!isResampleWorkflowEntry(entry)) return false;
   const history = Array.isArray(entry.cookingReport?.history) ? entry.cookingReport?.history || [] : [];
-  const statusEntries = history.filter((item: any) => !!item?.status);
-  if (statusEntries.length === 0 && !entry.cookingReport?.status) return false;
-
-  const { after, hasSplit } = splitHistoryByResampleStart(entry, history);
-  const cycleStatuses = (hasSplit ? after : history).filter((item: any) => !!item?.status);
-  if (hasSplit && cycleStatuses.length === 0) return false;
-  if (!hasSplit && statusEntries.length < 2) return false;
-  const latest = (cycleStatuses.length > 0 ? cycleStatuses[cycleStatuses.length - 1] : statusEntries[statusEntries.length - 1]) || null;
+  const cycleStatuses = getCurrentCycleCookingHistory(entry, history).filter((item: any) => !!item?.status);
+  if (cycleStatuses.length === 0) return false;
+  const latest = cycleStatuses[cycleStatuses.length - 1] || null;
   const key = String(latest?.status || entry.cookingReport?.status || '').toUpperCase();
   return ['PASS', 'MEDIUM', 'FAIL'].includes(key);
 };

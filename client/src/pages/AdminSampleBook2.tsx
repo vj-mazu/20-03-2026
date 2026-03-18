@@ -26,7 +26,9 @@ interface SampleEntry {
     workflowStatus: string;
     lotSelectionDecision?: string;
     lotSelectionAt?: string;
+    resampleStartAt?: string;
     qualityReportAttempts?: number;
+    qualityAttemptDetails?: any[];
     qualityParameters?: {
         moisture: number;
         cutting1: number;
@@ -610,15 +612,14 @@ const AdminSampleBook2: React.FC<AdminSampleBook2Props> = ({ entryType, excludeE
         const previousDecision = (entry as any).recheckPreviousDecision || null;
         const hasCookingHistory = buildCookingStatusRows(entry).length > 0;
         const isCookingDrivenResample = String(entry.lotSelectionDecision || '').toUpperCase() === 'FAIL' && hasCookingHistory;
-        const lotSelectionTs = getTimeValue((entry as any).lotSelectionAt || null);
+        const resampleBoundaryTs = getTimeValue((entry as any).resampleStartAt || (String(entry.lotSelectionDecision || '').toUpperCase() === 'FAIL' ? (entry as any).lotSelectionAt : null));
         const hasCurrentResampleQuality = attemptsSorted.some((attempt: any) => {
             const attemptTs = getTimeValue(attempt?.updatedAt || attempt?.createdAt || null);
-            return lotSelectionTs ? attemptTs > lotSelectionTs : (attemptsSorted.length > 1 && attemptTs > 0);
+            return resampleBoundaryTs ? attemptTs > resampleBoundaryTs : (attemptsSorted.length > 1 && attemptTs > 0);
         });
         const rows = attemptsSorted.map((attempt: any, idx: number) => {
             const attemptTs = getTimeValue(attempt?.updatedAt || attempt?.createdAt || null);
-            const isBeforeResampleBoundary = lotSelectionTs > 0 && attemptTs > 0 && attemptTs < lotSelectionTs;
-            const isCurrentResampleAttempt = isFailDecision && lotSelectionTs > 0 && attemptTs > lotSelectionTs;
+            const isBeforeResampleBoundary = resampleBoundaryTs > 0 && attemptTs > 0 && attemptTs < resampleBoundaryTs;
             const isLast = idx === attemptsSorted.length - 1;
             let status = mapQualityDecisionToStatus(entry.lotSelectionDecision);
 
@@ -630,7 +631,7 @@ const AdminSampleBook2: React.FC<AdminSampleBook2Props> = ({ entryType, excludeE
                 }
             } else if (isBeforeResampleBoundary) {
                 status = 'Pass';
-            } else if (lotSelectionTs > 0 && attemptTs >= lotSelectionTs) {
+            } else if (resampleBoundaryTs > 0 && attemptTs >= resampleBoundaryTs) {
                 const overallStatus = mapQualityDecisionToStatus(entry.lotSelectionDecision);
                 status = isHardFailed ? 'Fail' : (overallStatus === 'Pass' ? 'Pass' : 'Pending');
             } else if (isLast && isQualityRecheckPending && !isCookingOnlyRecheck) {
@@ -657,7 +658,7 @@ const AdminSampleBook2: React.FC<AdminSampleBook2Props> = ({ entryType, excludeE
 
         if (isFailDecision && !hasCurrentResampleQuality) {
             rows.push({ type: 'Pending', status: 'Resampling' });
-        } else if (isFailDecision && hasCurrentResampleQuality && rows.length === 1 && lotSelectionTs > 0) {
+        } else if (isFailDecision && hasCurrentResampleQuality && rows.length === 1 && resampleBoundaryTs > 0) {
             rows.unshift({ type: 'Done', status: 'Pass' });
         } else if (isQualityRecheckPending && !isCookingOnlyRecheck) {
             rows.push({ type: 'Recheck', status: 'Rechecking' });
@@ -1625,7 +1626,7 @@ const AdminSampleBook2: React.FC<AdminSampleBook2Props> = ({ entryType, excludeE
                                         );
                                     };
                                     const qualityPhotoUrl = qpList.find((qp: any) => qp?.uploadFileUrl)?.uploadFileUrl;
-                                    const hasHistory = detailMode === 'history' && qpList.length > 1;
+                                    const hasHistory = qpList.length > 1;
                                     const getAttemptLabel = (attemptNo: number, idx: number) => {
                                         const num = attemptNo || idx + 1;
                                         if (num === 1) return '1st Sample';

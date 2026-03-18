@@ -304,16 +304,20 @@ const attachLoadingLotsHistories = async (rows) => {
 
     // --- Refined Quality Attempt Grouping Logic ---
     // Boundaries are transitions TO 'QUALITY_CHECK'
-    const transitionLogs = sampleEntryAuditLogs.filter(l => 
-      l.actionType === 'WORKFLOW_TRANSITION' && 
-      l.newValues?.workflowStatus === 'QUALITY_CHECK'
-    );
+    const transitionLogs = sampleEntryAuditLogs.filter(l => {
+      if (l.actionType !== 'WORKFLOW_TRANSITION') return false;
+      const nv = normalizeAuditMetadata(l.newValues) || {};
+      return nv.workflowStatus === 'QUALITY_CHECK';
+    });
     
     const qualityAttemptDetails = [];
     
     // Find the original FAIL decision time to mark the start of resample flow.
     // If the lot was failed, there will be an audit log setting lotSelectionDecision to 'FAIL'
-    const failLog = sampleEntryAuditLogs.find(l => String(l.newValues?.lotSelectionDecision || '').toUpperCase() === 'FAIL');
+    const failLog = sampleEntryAuditLogs.find(l => {
+      const nv = normalizeAuditMetadata(l.newValues) || {};
+      return String(nv.lotSelectionDecision || '').toUpperCase() === 'FAIL';
+    });
     const resampleStartTime = failLog ? toTime(failLog.createdAt) : 0;
     target.resampleStartAt = failLog?.createdAt || null;
     
