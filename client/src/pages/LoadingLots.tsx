@@ -746,12 +746,6 @@ const LoadingLots: React.FC<LoadingLotsProps> = ({ entryType, excludeEntryType }
 
   const isManagerOrOwner = user?.role === 'manager' || user?.role === 'owner' || user?.role === 'admin';
   const totalPages = Math.ceil(total / pageSize);
-  const statusLabel = (status: string) => ({
-    STAFF_ENTRY: 'Staff Entry', QUALITY_NEEDED: 'Quality Needed', PENDING_LOT_SELECTION: 'Pending Lot Selection',
-    PENDING_COOKING_REPORT: 'Pending Cooking Report', PENDING_LOTS_PASSED: 'Pending Lots Passed', FINAL_REPORT: 'Pending Lots Passed',
-    LOT_ALLOTMENT: 'Pending Loading Lots', PENDING_ALLOTTING_SUPERVISOR: 'Pending Allotting Supervisor', PHYSICAL_INSPECTION: 'Physical Inspection',
-    INVENTORY_ENTRY: 'Inventory Entry', OWNER_FINANCIAL: 'Owner Financial', MANAGER_FINANCIAL: 'Manager Financial', FINAL_REVIEW: 'Final Review', COMPLETED: 'Completed'
-  }[status] || status.replace(/_/g, ' '));
 
   const getCollectorLabel = (value?: string | null) => {
     const raw = typeof value === 'string' ? value.trim() : '';
@@ -773,10 +767,9 @@ const LoadingLots: React.FC<LoadingLotsProps> = ({ entryType, excludeEntryType }
   const renderIndexedNames = (
     names: string[],
     formatter: (value: string) => string,
-    options?: { clickable?: boolean; onClick?: () => void; primaryColor?: string; secondaryColor?: string; }
+    options?: { primaryColor?: string; secondaryColor?: string; }
   ) => {
     if (names.length === 0) return '-';
-    const clickable = options?.clickable === true && typeof options?.onClick === 'function';
     return (
       <div
         style={{
@@ -786,11 +779,8 @@ const LoadingLots: React.FC<LoadingLotsProps> = ({ entryType, excludeEntryType }
           lineHeight: '1.35',
           fontWeight: 700,
           color: '#1f2937',
-          fontSize: '13px',
-          cursor: clickable ? 'pointer' : 'default',
-          textDecoration: clickable ? 'underline' : 'none'
+          fontSize: '13px'
         }}
-        onClick={clickable ? options?.onClick : undefined}
       >
         {names.map((name, index) => (
           <div key={`${name}-${index}`} style={{ display: 'flex', alignItems: 'flex-start', gap: '6px' }}>
@@ -811,7 +801,6 @@ const LoadingLots: React.FC<LoadingLotsProps> = ({ entryType, excludeEntryType }
         : (entry.sampleCollectedBy ? [entry.sampleCollectedBy] : [])
     );
     if (names.length === 0) return '-';
-    const hasQualityHistory = (entry.qualityAttemptDetails || []).length > 0;
     const isGivenToOffice = (entry as any).sampleGivenToOffice;
 
     if (isGivenToOffice && names.length > 0) {
@@ -819,15 +808,17 @@ const LoadingLots: React.FC<LoadingLotsProps> = ({ entryType, excludeEntryType }
       return renderIndexedNames(officeNames, (name) => name, { primaryColor: '#0f766e', secondaryColor: '#1f2937' });
     }
 
-    return renderIndexedNames(names, getCollectorLabel, {
-      clickable: hasQualityHistory,
-      onClick: () => setQualityHistoryModal({ open: true, entry })
-    });
+    return renderIndexedNames(names, getCollectorLabel);
   };
 
   const qualityModalEntry = qualityHistoryModal.entry;
   const qualityAttemptDetails = [...(qualityModalEntry?.qualityAttemptDetails || [])]
     .sort((a, b) => (a.attemptNo || 0) - (b.attemptNo || 0));
+  const qualityModalCollectedNames = buildOrderedNameList(
+    (qualityModalEntry?.sampleCollectedHistory || []).filter(Boolean).length > 0
+      ? (qualityModalEntry?.sampleCollectedHistory || [])
+      : (qualityModalEntry?.sampleCollectedBy ? [qualityModalEntry.sampleCollectedBy] : [])
+  );
 
   const modalOffering = selectedEntry?.offering || {};
   const modalRateType = managerData.baseRateType || modalOffering.baseRateType || 'PD_LOOSE';
@@ -835,7 +826,7 @@ const LoadingLots: React.FC<LoadingLotsProps> = ({ entryType, excludeEntryType }
   const modalHasEgb = hasEgbForRateType(modalRateType);
   const modalSuteMissing = !!selectedEntry && modalOffering.suteEnabled === false && !parseFloat(modalOffering.finalSute ?? '') && !parseFloat(modalOffering.sute ?? '');
   const modalMoistureMissing = !!selectedEntry && modalOffering.moistureEnabled === false && !parseFloat(modalOffering.moistureValue ?? '');
-  const modalHamaliMissing = !!selectedEntry && modalOffering.hamaliEnabled === false && !parseFloat(modalOffering.hamali ?? '');
+  const modalHamaliMissing = !!selectedEntry && modalOffering.hamaliEnabled === false && !hasValue(modalOffering.hamali ?? modalOffering.hamaliPerKg);
   const modalBrokerageMissing = !!selectedEntry && modalOffering.brokerageEnabled === false && !parseFloat(modalOffering.brokerage ?? '');
   const modalLfMissing = !!selectedEntry && modalHasLf && modalOffering.lfEnabled === false && !parseFloat(modalOffering.lf ?? '');
   const modalCdMissing = !!selectedEntry && !!modalOffering.cdEnabled && !parseFloat(modalOffering.cdValue ?? '');
@@ -1111,7 +1102,6 @@ const LoadingLots: React.FC<LoadingLotsProps> = ({ entryType, excludeEntryType }
                                 ? `Cooking Failed - ${getAttemptLabel(failedCookingAttempt.attemptNo)}`
                                 : '';
                               const adjustedAttemptCount = isResampleCase ? 2 : 1;
-                              const sc = ({ LOT_ALLOTMENT: { bg: '#e3f2fd', color: '#1565c0' }, PENDING_ALLOTTING_SUPERVISOR: { bg: '#fce4ec', color: '#880e4f' }, PHYSICAL_INSPECTION: { bg: '#ffe0b2', color: '#e65100' }, INVENTORY_ENTRY: { bg: '#e8f5e9', color: '#2e7d32' }, OWNER_FINANCIAL: { bg: '#f3e5f5', color: '#7b1fa2' }, MANAGER_FINANCIAL: { bg: '#e0f7fa', color: '#00695c' }, FINAL_REVIEW: { bg: '#fce4ec', color: '#c62828' } } as any)[entry.workflowStatus] || { bg: '#f5f5f5', color: '#333' };
                               const rowBg = entry.entryType === 'DIRECT_LOADED_VEHICLE' ? '#e3f2fd' : entry.entryType === 'LOCATION_SAMPLE' ? '#ffe0b2' : '#ffffff';
                               const typeCode = getEntryTypeCode(entry.entryType);
                               const partyNameText = toTitleCase(entry.partyName || '').trim();
@@ -1161,7 +1151,7 @@ const LoadingLots: React.FC<LoadingLotsProps> = ({ entryType, excludeEntryType }
                                     <td style={cellStyle(hamaliMissing)}>{hamaliMissing ? 'Need' : (o.hamali || o.hamaliPerKg ? fmtVal(o.hamali || o.hamaliPerKg, o.hamaliUnit) : o.hamaliEnabled === false ? 'Pending' : '-')}</td>
                                     <td style={cellStyle(bkrgMissing)}>{bkrgMissing ? 'Need' : (o.brokerage ? fmtVal(o.brokerage, o.brokerageUnit) : o.brokerageEnabled === false ? 'Pending' : '-')}</td>
                                     <td style={cellStyle(lfMissing)}>{lfMissing ? 'Need' : (o.lf ? fmtVal(o.lf, o.lfUnit) : o.lfEnabled === false ? 'Pending' : '-')}</td>
-                                    <td style={{ border: '1px solid #000', padding: '6px', textAlign: 'center' }}><div><span style={{ padding: '2px 6px', borderRadius: '10px', fontSize: '10px', fontWeight: 700, background: '#d4edda', color: '#155724', whiteSpace: 'nowrap', display: 'inline-block', marginBottom: '2px', border: '1px solid #c3e6cb' }}>Admin Added</span></div><div><span style={{ padding: '2px 6px', borderRadius: '10px', fontSize: '10px', fontWeight: 700, background: needsFill ? '#fff3cd' : '#d4edda', color: needsFill ? '#856404' : '#155724', whiteSpace: 'nowrap', display: 'inline-block', marginBottom: '2px', border: needsFill ? '1px solid #ffeeba' : '1px solid #c3e6cb' }}>{needsFill ? 'Manager Missing' : 'Manager Added'}</span></div><span style={{ padding: '1px 4px', borderRadius: '8px', fontSize: '9px', fontWeight: 600, background: sc.bg, color: sc.color, whiteSpace: 'nowrap' }}>{statusLabel(entry.workflowStatus)}</span></td>
+                                    <td style={{ border: '1px solid #000', padding: '6px', textAlign: 'center' }}><div><span style={{ padding: '2px 6px', borderRadius: '10px', fontSize: '10px', fontWeight: 700, background: '#d4edda', color: '#155724', whiteSpace: 'nowrap', display: 'inline-block', marginBottom: '2px', border: '1px solid #c3e6cb' }}>Admin Added</span></div><div><span style={{ padding: '2px 6px', borderRadius: '10px', fontSize: '10px', fontWeight: 700, background: needsFill ? '#fff3cd' : '#d4edda', color: needsFill ? '#856404' : '#155724', whiteSpace: 'nowrap', display: 'inline-block', marginBottom: '2px', border: needsFill ? '1px solid #ffeeba' : '1px solid #c3e6cb' }}>{needsFill ? 'Manager Missing' : 'Manager Added'}</span></div></td>
                                     <td style={{ border: '1px solid #000', padding: '6px', textAlign: 'center' }}>{isManagerOrOwner && <button onClick={() => handleUpdateClick(entry)} style={{ padding: '3px 4px', background: needsFill ? '#e67e22' : '#3498db', color: 'white', border: 'none', borderRadius: '4px', fontSize: '11px', cursor: 'pointer', fontWeight: 700, whiteSpace: 'nowrap' }}>{needsFill ? 'Fill Values' : 'View/Edit'}</button>}</td>
                                   </tr>
                                 );
@@ -1192,10 +1182,7 @@ const LoadingLots: React.FC<LoadingLotsProps> = ({ entryType, excludeEntryType }
                                   <td style={{ border: '1px solid #000', padding: '3px 5px', textAlign: 'left', fontSize: '13px', lineHeight: '1.35', wordBreak: 'break-word' }}>{renderCollectedByHistory(entry)}</td>
                                   <td style={{ border: '1px solid #000', padding: '3px 5px', textAlign: 'left', fontSize: '13px', lineHeight: '1.35', wordBreak: 'break-word' }}>
                                     {sampleReportNames.length === 0 ? '-' : (
-                                      renderIndexedNames(sampleReportNames, getCollectorLabel, {
-                                        clickable: (entry.qualityAttemptDetails || []).length > 0,
-                                        onClick: () => setQualityHistoryModal({ open: true, entry })
-                                      })
+                                      renderIndexedNames(sampleReportNames, getCollectorLabel)
                                     )}
                                   </td>
                                   <td style={{ border: '1px solid #000', padding: '3px 5px', textAlign: 'left', fontSize: '12px', lineHeight: '1.2', fontWeight: 700, color: getEntrySmellLabel(entry) === '-' ? '#666' : '#8a4b00', whiteSpace: 'nowrap' }}>
@@ -1323,9 +1310,6 @@ const LoadingLots: React.FC<LoadingLotsProps> = ({ entryType, excludeEntryType }
                                           {failedCookingLabel}
                                         </div>
                                       )}
-                                      <div style={{ fontSize: '10px', fontWeight: 800, color: sc.color, background: sc.bg, borderRadius: '4px', padding: '2px 4px', lineHeight: '1.2' }}>
-                                        {statusLabel(entry.workflowStatus)}
-                                      </div>
                                     </div>
                                   </td>
                                   <td style={{ border: '1px solid #000', padding: '6px', textAlign: 'center' }}>
@@ -1403,6 +1387,12 @@ const LoadingLots: React.FC<LoadingLotsProps> = ({ entryType, excludeEntryType }
                 return ` | Smell: ${toTitleCase(smellAttempt.smellType || 'Yes')}`;
               })()}
             </div>
+            {qualityModalCollectedNames.length > 0 ? (
+              <div style={{ marginBottom: '12px', border: '1px solid #d1d5db', borderRadius: '10px', padding: '10px', background: '#f8fafc' }}>
+                <div style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', marginBottom: '6px' }}>Sample Collected By</div>
+                {renderIndexedNames(qualityModalCollectedNames, getCollectorLabel)}
+              </div>
+            ) : null}
 
             {qualityAttemptDetails.length === 0 ? (
               <div style={{ fontSize: '13px', color: '#64748b' }}>No quality attempt history found.</div>
@@ -1652,12 +1642,15 @@ const LoadingLots: React.FC<LoadingLotsProps> = ({ entryType, excludeEntryType }
       )}
 
       {showOfferEditModal && selectedEntry && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1300 }}>
-          <div style={{ background: '#fff', borderRadius: '8px', padding: '14px', width: '100%', maxWidth: '760px', maxHeight: '88vh', overflowY: 'auto', boxShadow: '0 12px 30px rgba(0,0,0,0.25)' }}>
-            <div style={{ fontWeight: 700, fontSize: '15px', marginBottom: '10px' }}>Edit Offer Rate</div>
-            <div style={{ background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: '8px', padding: '8px 10px', marginBottom: '12px', fontSize: '12px', color: '#0f172a' }}>
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1300, padding: '12px' }}>
+          <div style={{ backgroundColor: '#fff', borderRadius: '12px', padding: '10px', width: '100%', maxWidth: '520px', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.4)' }}>
+            <h3 style={{ marginTop: 0, marginBottom: '8px', fontSize: '16px', fontWeight: '700', color: '#2c3e50', borderBottom: '3px solid #3498db', paddingBottom: '8px', textAlign: 'center' }}>
+              {selectedEntry.brokerName}
+            </h3>
+            <div style={{ backgroundColor: '#eaf2f8', padding: '6px 8px', borderRadius: '6px', marginBottom: '6px', fontSize: '10px', textAlign: 'center', lineHeight: '1.4' }}>
               Bags: <b>{selectedEntry.bags}</b> | Pkg: <b>{selectedEntry.packaging || '75'} Kg</b> | Party: <b>{toTitleCase(selectedEntry.partyName) || (selectedEntry.entryType === 'DIRECT_LOADED_VEHICLE' ? selectedEntry.lorryNumber?.toUpperCase() : '-')}</b> | Paddy Location: <b>{toTitleCase(selectedEntry.location) || '-'}</b> | Variety: <b>{toTitleCase(selectedEntry.variety) || '-'}</b>
             </div>
+            <div style={{ fontWeight: 700, fontSize: '13px', marginBottom: '10px', color: '#2563eb' }}>Edit Offer Rate</div>
             <div style={{ display: 'flex', gap: '6px', marginBottom: '8px' }}>
               <select
                 value={offerEditData.baseRateType}
@@ -1882,12 +1875,15 @@ const LoadingLots: React.FC<LoadingLotsProps> = ({ entryType, excludeEntryType }
       )}
 
       {showFinalEditModal && selectedEntry && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1300 }}>
-          <div style={{ background: '#fff', borderRadius: '8px', padding: '14px', width: '100%', maxWidth: '760px', maxHeight: '88vh', overflowY: 'auto', boxShadow: '0 12px 30px rgba(0,0,0,0.25)' }}>
-            <div style={{ fontWeight: 700, fontSize: '15px', marginBottom: '10px' }}>Edit Final Rate</div>
-            <div style={{ background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: '8px', padding: '8px 10px', marginBottom: '12px', fontSize: '12px', color: '#0f172a' }}>
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1300, padding: '12px' }}>
+          <div style={{ backgroundColor: '#fff', borderRadius: '12px', padding: '10px', width: '100%', maxWidth: '520px', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.4)' }}>
+            <h3 style={{ marginTop: 0, marginBottom: '8px', fontSize: '16px', fontWeight: '700', color: '#2c3e50', borderBottom: '3px solid #27ae60', paddingBottom: '8px', textAlign: 'center' }}>
+              {selectedEntry.brokerName}
+            </h3>
+            <div style={{ backgroundColor: '#e8f8f5', padding: '6px 8px', borderRadius: '6px', marginBottom: '6px', fontSize: '10px', textAlign: 'center', lineHeight: '1.4' }}>
               Bags: <b>{selectedEntry.bags}</b> | Pkg: <b>{selectedEntry.packaging || '75'} Kg</b> | Party: <b>{toTitleCase(selectedEntry.partyName) || (selectedEntry.entryType === 'DIRECT_LOADED_VEHICLE' ? selectedEntry.lorryNumber?.toUpperCase() : '-')}</b> | Paddy Location: <b>{toTitleCase(selectedEntry.location) || '-'}</b> | Variety: <b>{toTitleCase(selectedEntry.variety) || '-'}</b>
             </div>
+            <div style={{ fontWeight: 700, fontSize: '13px', marginBottom: '10px', color: '#16a34a' }}>Edit Final Rate</div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '8px', marginBottom: '10px' }}>
               <div>
                 <label style={{ fontSize: '11px', fontWeight: 700, color: '#1f2937', marginBottom: '4px', display: 'block' }}>Final Rate</label>

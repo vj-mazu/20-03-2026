@@ -40,17 +40,16 @@ if (dbUrl) {
 const sequelize = dbUrl
   ? new Sequelize(dbUrl, {
     dialect: 'postgres',
-    protocol: 'postgres',
     logging: process.env.NODE_ENV === 'development' ? console.log : false,
     minifyAliases: true,
     dialectOptions: {
       ssl: {
         require: true,
-        rejectUnauthorized: false // Required for some PaaS providers like Render/Supabase
+        rejectUnauthorized: false
       },
-      statement_timeout: 30000,           // Database-level timeout (30s)
-      query_timeout: 25000,               // Sequelize-level timeout (25s) - fires before DB timeout
-      idle_in_transaction_session_timeout: 60000,
+      keepAlive: true,
+      statement_timeout: 30000,
+      query_timeout: 25000,
       application_name: 'mother_india_stock_mgmt'
     },
     pool: {
