@@ -77,6 +77,30 @@ const SampleEntryPage: React.FC<{
     const raw = creator?.fullName || creator?.username || '';
     return raw ? toTitleCase(raw) : '-';
   };
+  const getCollectedByDisplay = (entry: SampleEntry) => {
+    const creatorLabel = getCreatorLabel(entry);
+    const collectorLabel = getCollectorLabel(entry.sampleCollectedBy || null);
+    const isGivenToOffice = Boolean((entry as any)?.sampleGivenToOffice);
+
+    if (isGivenToOffice) {
+      const primary = creatorLabel !== '-' ? creatorLabel : collectorLabel;
+      const secondary = collectorLabel !== '-' && collectorLabel !== primary ? collectorLabel : null;
+      return { primary, secondary, highlightPrimary: true };
+    }
+
+    return {
+      primary: collectorLabel !== '-' ? collectorLabel : creatorLabel,
+      secondary: null,
+      highlightPrimary: false
+    };
+  };
+  const collectedByHighlightColor = '#0f766e';
+  const formatDateInputValue = (date: Date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
   const formatShortDateTime = (dateStr: string | null) => {
     if (!dateStr) return '-';
     const date = new Date(dateStr);
@@ -97,6 +121,80 @@ const SampleEntryPage: React.FC<{
     if (!value) return 0;
     const time = new Date(value).getTime();
     return Number.isFinite(time) ? time : 0;
+  };
+  const isProvidedNumericValue = (rawVal: any, valueVal: any) => {
+    const raw = rawVal !== null && rawVal !== undefined ? String(rawVal).trim() : '';
+    if (raw !== '') return true;
+    const num = Number(valueVal);
+    return Number.isFinite(num) && num > 0;
+  };
+  const isProvidedAlphaValue = (rawVal: any, valueVal: any) => {
+    const raw = rawVal !== null && rawVal !== undefined ? String(rawVal).trim() : '';
+    if (raw !== '') return true;
+    return hasAlphaOrPositiveValue(valueVal);
+  };
+  const hasQualitySnapshot = (attempt: any) => {
+    const hasMoisture = isProvidedNumericValue(attempt?.moistureRaw, attempt?.moisture);
+    const hasGrains = isProvidedNumericValue(attempt?.grainsCountRaw, attempt?.grainsCount);
+    const hasDetailedQuality =
+      isProvidedNumericValue(attempt?.cutting1Raw, attempt?.cutting1) ||
+      isProvidedNumericValue(attempt?.bend1Raw, attempt?.bend1) ||
+      isProvidedAlphaValue(attempt?.mixRaw, attempt?.mix) ||
+      isProvidedAlphaValue(attempt?.mixSRaw, attempt?.mixS) ||
+      isProvidedAlphaValue(attempt?.mixLRaw, attempt?.mixL) ||
+      isProvidedAlphaValue(attempt?.kanduRaw, attempt?.kandu) ||
+      isProvidedAlphaValue(attempt?.oilRaw, attempt?.oil) ||
+      isProvidedAlphaValue(attempt?.skRaw, attempt?.sk);
+
+    return hasMoisture && (hasGrains || hasDetailedQuality);
+  };
+  const getQualityAttemptsForEntry = (entry: any) => {
+    const baseAttempts = Array.isArray(entry?.qualityAttemptDetails)
+      ? [...entry.qualityAttemptDetails].filter(Boolean).sort((a: any, b: any) => (a.attemptNo || 0) - (b.attemptNo || 0))
+      : [];
+    const currentQuality = entry?.qualityParameters;
+
+    if (!currentQuality) return baseAttempts;
+    if (baseAttempts.length === 0) return hasQualitySnapshot(currentQuality) ? [currentQuality] : [];
+
+    const latestStoredAttempt = baseAttempts[baseAttempts.length - 1];
+    const latestStoredTs = getTimeValue(latestStoredAttempt?.updatedAt || latestStoredAttempt?.createdAt || null);
+    const currentQualityTs = getTimeValue(currentQuality.updatedAt || currentQuality.createdAt || null);
+    const lotSelectionTs = getTimeValue(entry?.lotSelectionAt || null);
+    const isResampleFlow = String(entry?.lotSelectionDecision || '').toUpperCase() === 'FAIL' || baseAttempts.length > 1;
+    const shouldAppendCurrentQuality =
+      hasQualitySnapshot(currentQuality) &&
+      isResampleFlow &&
+      currentQualityTs > latestStoredTs &&
+      (!lotSelectionTs || currentQualityTs >= lotSelectionTs);
+
+    if (!shouldAppendCurrentQuality) return baseAttempts;
+
+    return [
+      ...baseAttempts,
+      {
+        ...currentQuality,
+        attemptNo: Math.max(...baseAttempts.map((attempt: any) => Number(attempt.attemptNo) || 0), 1) + 1
+      }
+    ];
+  };
+  const getEntrySmellLabel = (entry: any) => {
+    const attempts = getQualityAttemptsForEntry(entry);
+    for (let idx = attempts.length - 1; idx >= 0; idx -= 1) {
+      const attempt = attempts[idx];
+      if (attempt?.smellHas || (attempt?.smellType && String(attempt.smellType).trim())) {
+        return toTitleCase(attempt.smellType || 'Yes');
+      }
+    }
+
+    const quality = entry?.qualityParameters;
+    if (quality?.smellHas || (quality?.smellType && String(quality.smellType).trim())) {
+      return toTitleCase(quality.smellType || 'Yes');
+    }
+    if (entry?.smellHas || (entry?.smellType && String(entry.smellType).trim())) {
+      return toTitleCase(entry.smellType || 'Yes');
+    }
+    return '-';
   };
   const isRiceQualityEntry = filterEntryType === 'RICE_SAMPLE' || selectedEntry?.entryType === 'RICE_SAMPLE';
   const isStaffUser = ['staff', 'physical_supervisor', 'paddy_supervisor'].includes(String(user?.role || '').toLowerCase());
@@ -419,6 +517,29 @@ const SampleEntryPage: React.FC<{
     } else {
       setPage(1);
       loadEntries(1, '', '', '', '', '', '', '');
+    }
+  };
+  const applyQuickDateFilter = (preset: 'today' | 'yesterday' | 'last7') => {
+    const startDate = new Date();
+    const endDate = new Date();
+
+    if (preset === 'yesterday') {
+      startDate.setDate(startDate.getDate() - 1);
+      endDate.setDate(endDate.getDate() - 1);
+    } else if (preset === 'last7') {
+      startDate.setDate(startDate.getDate() - 6);
+    }
+
+    const startValue = formatDateInputValue(startDate);
+    const endValue = formatDateInputValue(endDate);
+    setFilterDateFrom(startValue);
+    setFilterDateTo(endValue);
+
+    if (page === 1) {
+      loadEntries(1, startValue, endValue);
+    } else {
+      setPage(1);
+      loadEntries(1, startValue, endValue);
     }
   };
 
@@ -1346,6 +1467,34 @@ const SampleEntryPage: React.FC<{
                 style={{ padding: '6px 10px', border: '1px solid #ced4da', borderRadius: '4px', fontSize: '13px', width: '135px' }} />
             </div>
             <div>
+              <label style={{ display: 'block', fontSize: '11px', fontWeight: '700', color: '#1a237e', marginBottom: '4px' }}>Quick Date</label>
+              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                {[
+                  { label: 'Today', value: 'today' as const },
+                  { label: 'Yesterday', value: 'yesterday' as const },
+                  { label: 'Last 7 Days', value: 'last7' as const }
+                ].map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => applyQuickDateFilter(option.value)}
+                    style={{
+                      padding: '6px 10px',
+                      borderRadius: '999px',
+                      border: '1px solid #bfdbfe',
+                      backgroundColor: '#eff6ff',
+                      color: '#1d4ed8',
+                      fontSize: '11px',
+                      fontWeight: '700',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
               <label style={{ display: 'block', fontSize: '11px', fontWeight: '700', color: '#1a237e', marginBottom: '4px' }}>Broker</label>
               <select value={filterBroker} onChange={e => setFilterBroker(e.target.value)}
                 style={{ padding: '6px 10px', border: '1px solid #ced4da', borderRadius: '4px', fontSize: '13px', minWidth: '150px', backgroundColor: 'white' }}>
@@ -1550,8 +1699,8 @@ const SampleEntryPage: React.FC<{
                             <th style={{ fontWeight: '600', fontSize: '13px', textAlign: 'left', whiteSpace: 'nowrap', width: '16%' }}>Party Name</th>
                            <th style={{ fontWeight: '600', fontSize: '13px', textAlign: 'left', whiteSpace: 'nowrap', width: '14%' }}>{filterEntryType === 'RICE_SAMPLE' ? 'Rice Location' : 'Paddy Location'}</th>
                            <th style={{ fontWeight: '600', fontSize: '13px', textAlign: 'left', whiteSpace: 'nowrap', width: '12%' }}>Variety</th>
-                            <th style={{ fontWeight: '600', fontSize: '13px', textAlign: 'left', whiteSpace: 'nowrap', width: '25%' }}>Sample Reports</th>
-                            <th style={{ fontWeight: '600', fontSize: '13px', textAlign: 'left', whiteSpace: 'nowrap', width: '10%' }}>Sample Collected By</th>
+                            <th style={{ fontWeight: '600', fontSize: '13px', textAlign: 'left', whiteSpace: 'nowrap', width: '33%' }}>Sample Reports</th>
+                            <th style={{ fontWeight: '600', fontSize: '13px', textAlign: 'left', whiteSpace: 'nowrap', width: '12%' }}>Sample Collected By</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -1563,16 +1712,18 @@ const SampleEntryPage: React.FC<{
                           }).map((entry, index) => {
                             slNo++;
                             const qp = (entry as any).qualityParameters;
-                            const resampleAttempts = Math.max(0, Number((entry as any).qualityReportAttempts || 0));
+                            const qualityAttempts = getQualityAttemptsForEntry(entry as any);
+                            const resampleAttempts = Math.max(0, qualityAttempts.length - 1);
                             const isPaddyResampleWorkflow =
                               filterEntryType !== 'RICE_SAMPLE'
                               && entry.lotSelectionDecision === 'FAIL'
                               && entry.workflowStatus !== 'FAILED';
-                            const resampleQualitySaved =
-                              isPaddyResampleWorkflow
+                            const resampleQualitySaved = isPaddyResampleWorkflow
                               && !!entry.lotSelectionAt
-                              && qp
-                              && getTimeValue(qp.updatedAt || qp.createdAt) >= getTimeValue(entry.lotSelectionAt);
+                              && qualityAttempts.some((attempt: any) => (
+                                getTimeValue(attempt?.updatedAt || attempt?.createdAt || null) >= getTimeValue(entry.lotSelectionAt)
+                                && hasQualitySnapshot(attempt)
+                              ));
                             const assignedResampleCollector = !!entry.sampleCollectedBy
                               && locationSupervisorSet.has(entry.sampleCollectedBy.trim().toLowerCase());
                             const isPaddyResampleEntry = isPaddyResampleWorkflow
@@ -1819,7 +1970,7 @@ const SampleEntryPage: React.FC<{
                                                    fontSize: '11px',
                                                    padding: '3px 8px',
                                                    backgroundColor: showResampleQualityCompleted ? '#ccfbf1' : '#e8f5e9',
-                                                   color: showResampleQualityCompleted ? '#115e59' : '#2e7d32',
+                                                   color: showResampleQualityCompleted ? '#115e59' : '#27ae60',
                                                    borderRadius: '3px',
                                                    fontWeight: '700',
                                                    border: showResampleQualityCompleted ? '1.5px solid #14b8a6' : '1.5px solid #66bb6a'
@@ -1917,7 +2068,25 @@ const SampleEntryPage: React.FC<{
                                   </div>
                                 </td>
                                 <td style={{ padding: '1px 8px', textAlign: 'left', fontSize: '11px', lineHeight: '1.2', verticalAlign: 'middle' }}>
-                                  {entry.sampleCollectedBy ? getCollectorLabel(entry.sampleCollectedBy) : ((entry as any).creator?.username ? toTitleCase((entry as any).creator.username) : '-')}
+                                  {(() => {
+                                    const collectedByDisplay = getCollectedByDisplay(entry as any);
+
+                                    if (collectedByDisplay.secondary) {
+                                      return (
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
+                                          <span style={{ color: collectedByDisplay.highlightPrimary ? collectedByHighlightColor : '#1e293b', fontWeight: '700', fontSize: '11px' }}>
+                                            {collectedByDisplay.primary}
+                                          </span>
+                                          <span style={{ color: '#94a3b8', fontWeight: '800', fontSize: '10px' }}>/</span>
+                                          <span style={{ color: '#1e293b', fontWeight: '600', fontSize: '10px' }}>
+                                            {collectedByDisplay.secondary}
+                                          </span>
+                                        </div>
+                                      );
+                                    }
+
+                                    return collectedByDisplay.primary;
+                                  })()}
                                 </td>
                               </tr>
                             );
@@ -3632,7 +3801,7 @@ const SampleEntryPage: React.FC<{
       {detailEntry && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 9999, padding: '20px' }}
            onClick={() => setDetailEntry(null)}>
-          <div style={{ backgroundColor: 'white', borderRadius: '8px', width: '95%', maxWidth: '500px', maxHeight: '90vh', overflowY: 'auto', overflowX: 'hidden', boxShadow: '0 8px 32px rgba(0,0,0,0.3)' }}
+          <div style={{ backgroundColor: 'white', borderRadius: '8px', width: '95%', maxWidth: '1200px', maxHeight: '90vh', overflowY: 'auto', overflowX: 'hidden', boxShadow: '0 8px 32px rgba(0,0,0,0.3)' }}
             onClick={e => e.stopPropagation()}>
             {/* Elite Header */}
             <div style={{
@@ -3673,7 +3842,7 @@ const SampleEntryPage: React.FC<{
                 ))}
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr', gap: '12px', marginBottom: '20px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px', marginBottom: '20px' }}>
                 <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
                   <div style={{ fontSize: '9px', color: '#64748b', marginBottom: '4px', fontWeight: '700', textTransform: 'uppercase' }}>Party Name</div>
                   <div style={{ fontSize: '15px', fontWeight: '700', color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{getPartyLabel(detailEntry)}</div>
@@ -3684,42 +3853,39 @@ const SampleEntryPage: React.FC<{
                 </div>
                 <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
                   <div style={{ fontSize: '9px', color: '#64748b', marginBottom: '4px', fontWeight: '700', textTransform: 'uppercase' }}>Collected By</div>
-                  {(detailEntry as any).sampleGivenToOffice ? (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                      <div style={{ fontSize: '13px', fontWeight: '700', color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        Taken By: {getCreatorLabel(detailEntry)}
+                  {(() => {
+                    const collectedByDisplay = getCollectedByDisplay(detailEntry as any);
+                    return (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        {collectedByDisplay.secondary ? (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                            <span style={{ fontSize: '14px', fontWeight: '700', color: collectedByDisplay.highlightPrimary ? collectedByHighlightColor : '#1e293b' }}>
+                              {collectedByDisplay.primary}
+                            </span>
+                            <span style={{ fontSize: '12px', color: '#94a3b8', fontWeight: '800' }}>/</span>
+                            <span style={{ fontSize: '12px', fontWeight: '600', color: '#1e293b' }}>
+                              {collectedByDisplay.secondary}
+                            </span>
+                          </div>
+                        ) : null}
+                        {!collectedByDisplay.secondary ? (
+                          <div style={{ fontSize: '14px', fontWeight: '700', color: collectedByDisplay.highlightPrimary ? collectedByHighlightColor : '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {collectedByDisplay.primary}
+                          </div>
+                        ) : null}
                       </div>
-                      <div style={{ fontSize: '13px', fontWeight: '700', color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        Given to Office: {getCollectorLabel(detailEntry.sampleCollectedBy || '-')}
-                      </div>
-                    </div>
-                  ) : (
-                    <div style={{ fontSize: '14px', fontWeight: '700', color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {getCollectorLabel(detailEntry.sampleCollectedBy || getCreatorLabel(detailEntry))}
-                    </div>
-                  )}
+                    );
+                  })()}
                 </div>
-              </div>
-              {(() => {
-                const qpSmellHas = (detailEntry as any)?.qualityParameters?.smellHas;
-                const qpSmellType = (detailEntry as any)?.qualityParameters?.smellType;
-                const entrySmellHas = (detailEntry as any)?.smellHas;
-                const entrySmellType = (detailEntry as any)?.smellType;
-                const smellHas = qpSmellHas ?? entrySmellHas;
-                const smellType = qpSmellType ?? entrySmellType;
-                if (!smellHas && !(smellType && String(smellType).trim())) return null;
-                return (
-                  <div style={{ marginBottom: '20px', display: 'grid', gridTemplateColumns: '1fr', gap: '12px' }}>
-                    <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                      <div style={{ fontSize: '9px', color: '#64748b', marginBottom: '4px', fontWeight: '700', textTransform: 'uppercase' }}>Smell</div>
-                      <div style={{ fontSize: '14px', fontWeight: '700', color: '#1e293b' }}>
-                        {toTitleCase(smellType || 'Yes')}
-                      </div>
+                {getEntrySmellLabel(detailEntry as any) !== '-' ? (
+                  <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                    <div style={{ fontSize: '9px', color: '#64748b', marginBottom: '4px', fontWeight: '700', textTransform: 'uppercase' }}>Smell</div>
+                    <div style={{ fontSize: '14px', fontWeight: '700', color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {getEntrySmellLabel(detailEntry as any)}
                     </div>
                   </div>
-                );
-              })()}
-
+                ) : null}
+              </div>
               {/* GPS & Media - Hide in quick mode if redundant or keep minimal */}
               {((detailEntry as any).gpsCoordinates || (detailEntry as any).godownImageUrl || (detailEntry as any).paddyLotImageUrl) && (
                 <div style={{ marginBottom: '24px' }}>
@@ -3754,13 +3920,14 @@ const SampleEntryPage: React.FC<{
                 </div>
               )}
 
-              {/* Quality Parameters — Multi-Attempt Support — Horizontal Layout */}
-              <h4 style={{ margin: '0 0 10px', fontSize: '14px', color: '#e67e22', borderBottom: '2px solid #e67e22', paddingBottom: '6px', fontWeight: '800' }}>🔬 Quality Parameters</h4>
-              {(() => {
-                const qpAll = (detailEntry as any).qualityAttemptDetails && (detailEntry as any).qualityAttemptDetails.length > 0
-                  ? [...(detailEntry as any).qualityAttemptDetails].sort((a,b) => (a.attemptNo || 0) - (b.attemptNo || 0))
-                  : (detailEntry as any).qualityParameters ? [(detailEntry as any).qualityParameters] : [];
-                const qpList = qpAll.length > 0 ? [qpAll[qpAll.length - 1]] : [];
+              {/* Horizontal Layout: Quality Parameters / Cooking History */}
+              <div style={{ display: 'grid', gridTemplateColumns: getQualityAttemptsForEntry(detailEntry as any).length > 1 ? 'minmax(0, 1fr)' : 'minmax(0, 1.6fr) minmax(340px, 1fr)', gap: '20px', marginTop: '20px', alignItems: 'start' }}>
+                {/* LEFT SIDE: Quality Parameters */}
+                <div style={{ flex: 1 }}>
+                  <h4 style={{ margin: '0 0 10px', fontSize: '14px', color: '#e67e22', borderBottom: '2px solid #e67e22', paddingBottom: '6px', fontWeight: '800' }}>🔬 Quality Parameters</h4>
+                  {(() => {
+                const qpAll = getQualityAttemptsForEntry(detailEntry as any);
+                const qpList = qpAll;
 
                 if (qpList.length === 0) return <div style={{ color: '#999', textAlign: 'center', padding: '12px', fontSize: '12px' }}>No quality data</div>;
 
@@ -3818,8 +3985,138 @@ const SampleEntryPage: React.FC<{
                   );
                 };
                 const qualityPhotoUrl = qpList.find((qp: any) => qp?.uploadFileUrl)?.uploadFileUrl;
-
                 const hasMultipleAttempts = qpList.length > 1;
+                const getAttemptLabel = (attemptNo: number, idx: number) => {
+                  const num = attemptNo || idx + 1;
+                  if (num === 1) return '1st Sample';
+                  if (num === 2) return '2nd Sample';
+                  if (num === 3) return '3rd Sample';
+                  return `${num}th Sample`;
+                };
+
+                if (hasMultipleAttempts) {
+                  const columns = [
+                    { key: 'reportedBy', label: 'Sample Reported By' },
+                    { key: 'moisture', label: 'Moisture' },
+                    { key: 'cutting', label: 'Cutting' },
+                    { key: 'bend', label: 'Bend' },
+                    { key: 'grainsCount', label: 'Grains Count' },
+                    { key: 'mix', label: 'Mix' },
+                    { key: 'mixS', label: 'S Mix' },
+                    { key: 'mixL', label: 'L Mix' },
+                    { key: 'kandu', label: 'Kandu' },
+                    { key: 'oil', label: 'Oil' },
+                    { key: 'sk', label: 'SK' },
+                    { key: 'wbR', label: 'WB-R' },
+                    { key: 'wbBk', label: 'WB-BK' },
+                    { key: 'wbT', label: 'WB-T' },
+                    { key: 'smell', label: 'Smell' },
+                    { key: 'paddyWb', label: 'Paddy WB' }
+                  ];
+
+                  const getCellValue = (qp: any, key: string) => {
+                    const smixOn = isEnabled(qp.smixEnabled, qp.mixSRaw, qp.mixS);
+                    const lmixOn = isEnabled(qp.lmixEnabled, qp.mixLRaw, qp.mixL);
+                    const paddyOn = isEnabled(qp.paddyWbEnabled, qp.paddyWbRaw, qp.paddyWb);
+                    const wbOn = isProvided(qp.wbRRaw, qp.wbR) || isProvided(qp.wbBkRaw, qp.wbBk);
+                    if (key === 'reportedBy') return toTitleCase(qp.reportedBy || '-');
+                    if (key === 'moisture') {
+                      const val = displayVal(qp.moistureRaw, qp.moisture);
+                      return val ? `${val}%` : '-';
+                    }
+                    if (key === 'cutting') {
+                      const cut1 = displayVal(qp.cutting1Raw, qp.cutting1);
+                      const cut2 = displayVal(qp.cutting2Raw, qp.cutting2);
+                      return cut1 && cut2 ? `${cut1}x${cut2}` : '-';
+                    }
+                    if (key === 'bend') {
+                      const bend1 = displayVal(qp.bend1Raw, qp.bend1);
+                      const bend2 = displayVal(qp.bend2Raw, qp.bend2);
+                      return bend1 && bend2 ? `${bend1}x${bend2}` : '-';
+                    }
+                    if (key === 'grainsCount') {
+                      const val = displayVal(qp.grainsCountRaw, qp.grainsCount);
+                      return val ? `(${val})` : '-';
+                    }
+                    if (key === 'mix') return displayVal(qp.mixRaw, qp.mix) || '-';
+                    if (key === 'mixS') return displayVal(qp.mixSRaw, qp.mixS, smixOn) || '-';
+                    if (key === 'mixL') return displayVal(qp.mixLRaw, qp.mixL, lmixOn) || '-';
+                    if (key === 'kandu') return displayVal(qp.kanduRaw, qp.kandu) || '-';
+                    if (key === 'oil') return displayVal(qp.oilRaw, qp.oil) || '-';
+                    if (key === 'sk') return displayVal(qp.skRaw, qp.sk) || '-';
+                    if (key === 'wbR') return displayVal(qp.wbRRaw, qp.wbR, wbOn) || '-';
+                    if (key === 'wbBk') return displayVal(qp.wbBkRaw, qp.wbBk, wbOn) || '-';
+                    if (key === 'wbT') return displayVal(qp.wbTRaw, qp.wbT, wbOn) || '-';
+                    if (key === 'smell') {
+                      const smellHasValue = qp.smellHas ?? (detailEntry as any).smellHas;
+                      const smellTypeValue = qp.smellType ?? (detailEntry as any).smellType;
+                      return smellHasValue ? toTitleCase(smellTypeValue || 'Yes') : '-';
+                    }
+                    if (key === 'paddyWb') return displayVal(qp.paddyWbRaw, qp.paddyWb, paddyOn) || '-';
+                    return '-';
+                  };
+
+                  return (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', padding: '0 0 12px 0' }}>
+                      {qualityPhotoUrl && (
+                        <div style={{
+                          width: '100%',
+                          background: '#fff',
+                          border: '1.5px solid #e2e8f0',
+                          borderRadius: '10px',
+                          padding: '12px',
+                          boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
+                        }}>
+                          <div style={{
+                            fontSize: '11px',
+                            fontWeight: '900',
+                            color: '#fff',
+                            backgroundColor: '#1d4ed8',
+                            margin: '-12px -12px 10px -12px',
+                            padding: '6px 12px',
+                            borderRadius: '8px 8px 0 0',
+                            textAlign: 'center',
+                            textTransform: 'uppercase',
+                            letterSpacing: '1px'
+                          }}>
+                            Quality Photo
+                          </div>
+                          <img
+                            src={`${API_URL.replace('/api', '')}${qualityPhotoUrl}`}
+                            alt="Quality"
+                            style={{ width: '100%', height: '160px', objectFit: 'cover', borderRadius: '6px', border: '1px solid #e2e8f0' }}
+                          />
+                        </div>
+                      )}
+                      <div style={{ overflowX: 'auto', width: '100%' }}>
+                        <table style={{ width: '100%', minWidth: '1180px', borderCollapse: 'collapse', fontSize: '11px', tableLayout: 'auto' }}>
+                          <thead>
+                            <tr>
+                              <th style={{ border: '1px solid #e0e0e0', padding: '6px', background: '#f7f7f7', textAlign: 'left', whiteSpace: 'nowrap' }}>Sample</th>
+                              {columns.map((col) => (
+                                <th key={col.key} style={{ border: '1px solid #e0e0e0', padding: '6px', background: '#f7f7f7', textAlign: 'center', whiteSpace: 'nowrap' }}>{col.label}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {qpList.map((qp: any, idx: number) => (
+                              <tr key={`${qp.attemptNo || idx}-row`}>
+                                <td style={{ border: '1px solid #e0e0e0', padding: '6px', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                                  {getAttemptLabel(qp.attemptNo, idx)}
+                                </td>
+                                {columns.map((col) => (
+                                  <td key={`${qp.attemptNo || idx}-${col.key}`} style={{ border: '1px solid #e0e0e0', padding: '6px', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                                    {getCellValue(qp, col.key)}
+                                  </td>
+                                ))}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  );
+                }
 
                 return (
                   <div style={{ 
@@ -3899,15 +4196,10 @@ const SampleEntryPage: React.FC<{
                       const hasKandu = displayVal((qp as any).kanduRaw, qp.kandu);
                       const hasOil = displayVal((qp as any).oilRaw, qp.oil);
                       const hasSK = displayVal((qp as any).skRaw, qp.sk);
-                      const smellHas = (qp as any).smellHas;
-                      const smellType = (qp as any).smellType;
                       const row3: { label: string; value: React.ReactNode }[] = [];
                       if (hasKandu) row3.push({ label: 'Kandu', value: hasKandu });
                       if (hasOil) row3.push({ label: 'Oil', value: hasOil });
                       if (hasSK) row3.push({ label: 'SK', value: hasSK });
-                      if (smellHas || (smellType && String(smellType).trim())) {
-                        row3.push({ label: 'Smell', value: toTitleCase(smellType || 'Yes') });
-                      }
                       
                       const row4: { label: string; value: React.ReactNode }[] = [];
                       const wbRVal = displayVal((qp as any).wbRRaw, qp.wbR, wbEnabled);
@@ -3916,8 +4208,26 @@ const SampleEntryPage: React.FC<{
                       if (wbRVal) row4.push({ label: 'WB-R', value: wbRVal });
                       if (wbBkVal) row4.push({ label: 'WB-BK', value: wbBkVal });
                       if (wbTVal) row4.push({ label: 'WB-T', value: wbTVal });
+                      const smellHas = (qp as any).smellHas ?? (qpList.length === 1 ? (detailEntry as any).smellHas : undefined);
+                      const smellType = (qp as any).smellType ?? (qpList.length === 1 ? (detailEntry as any).smellType : undefined);
+                      if (smellHas || (smellType && String(smellType).trim())) {
+                        row4.push({ label: 'Smell', value: toTitleCase(smellType || 'Yes') });
+                      }
                       
                       const hasPaddyWb = displayVal((qp as any).paddyWbRaw, qp.paddyWb, paddyWbEnabled);
+                      if (hasPaddyWb) {
+                        row4.push({
+                          label: 'Paddy WB',
+                          value: (
+                            <span style={{
+                              color: Number(qp.paddyWb) < 50 ? '#d32f2f' : (Number(qp.paddyWb) <= 50.5 ? '#f39c12' : '#1b5e20'),
+                              fontWeight: '800'
+                            }}>
+                              {hasPaddyWb}
+                            </span>
+                          )
+                        });
+                      }
                       
                       const attemptLabel = qp.attemptNo ? `${qp.attemptNo}${qp.attemptNo === 1 ? 'st' : qp.attemptNo === 2 ? 'nd' : 'th'} Quality` : `${idx + 1}${idx === 0 ? 'st' : idx === 1 ? 'nd' : 'th'} Quality`;
 
@@ -3959,16 +4269,16 @@ const SampleEntryPage: React.FC<{
                           
                           {row4.length > 0 && <div style={{ display: 'grid', gridTemplateColumns: `repeat(${row4.length}, 1fr)`, gap: '6px', marginBottom: '6px' }}>{row4.map(item => <QItem key={item.label} label={item.label} value={item.value} />)}</div>}
                           
-                          {hasPaddyWb && (
-                            <div style={{ marginTop: '8px', padding: '6px', background: '#f0fdf4', borderRadius: '6px', border: '1px solid #bbf7d0', textAlign: 'center' }}>
-                              <div style={{ fontSize: '9px', color: '#166534', fontWeight: '800', textTransform: 'uppercase' }}>Paddy WB</div>
-                              <div style={{ fontSize: '13px', fontWeight: '900', color: '#1b5e20' }}>{hasPaddyWb}</div>
-                            </div>
-                          )}
-                          
                           {qp.reportedBy && (
                             <div style={{ marginTop: '8px', borderTop: '1px dashed #e2e8f0', paddingTop: '6px' }}>
-                              <div style={{ fontSize: '11px', color: '#64748b', fontWeight: '600', textAlign: 'center' }}>Reported By: <span style={{ color: '#1e293b', fontWeight: '800', fontSize: '13px' }}>{toTitleCase(qp.reportedBy)}</span></div>
+                              <div style={{ fontSize: '11px', color: '#64748b', fontWeight: '600', textAlign: 'center' }}>Reported By: <span style={{ color: '#1e293b', fontWeight: '800', fontSize: '13px' }}>{(() => {
+                                // Display full name if reportedByUser object is available, otherwise use reportedBy string
+                                const reportedByUser = (qp as any).reportedByUser;
+                                if (reportedByUser && reportedByUser.fullName) {
+                                  return toTitleCase(reportedByUser.fullName);
+                                }
+                                return toTitleCase(qp.reportedBy);
+                              })()}</span></div>
                             </div>
                           )}
                         </div>
@@ -3977,16 +4287,88 @@ const SampleEntryPage: React.FC<{
                   </div>
                 );
               })()}
+                </div>
 
-              {/* Cooking History & Remarks (Staff View) */}
-              <h4 style={{ margin: '16px 0 10px', fontSize: '13px', color: '#1565c0', borderBottom: '2px solid #1565c0', paddingBottom: '6px', fontWeight: '800' }}>🍳 Cooking History & Remarks</h4>
-              {(() => {
+                {/* RIGHT SIDE: Cooking History */}
+                <div style={{ flex: 1 }}>
+                  <h4 style={{ margin: '0 0 10px', fontSize: '13px', color: '#1565c0', borderBottom: '2px solid #1565c0', paddingBottom: '6px', fontWeight: '800' }}>🍳 Cooking History & Remarks</h4>
+                  {(() => {
                 const cr = (detailEntry as any).cookingReport;
-                const history = Array.isArray(cr?.history) ? cr!.history : [];
+                const normalizeCookingStatus = (status?: string | null) => {
+                  const normalized = String(status || '').trim().toUpperCase();
+                  if (normalized === 'PASS' || normalized === 'OK') return 'Pass';
+                  if (normalized === 'MEDIUM') return 'Medium';
+                  if (normalized === 'FAIL') return 'Fail';
+                  if (normalized === 'RECHECK') return 'Recheck';
+                  if (normalized === 'PENDING') return 'Pending';
+                  return normalized ? toTitleCase(normalized.toLowerCase()) : 'Pending';
+                };
+                const toTs = (value: any) => {
+                  if (!value) return 0;
+                  const ts = new Date(value).getTime();
+                  return Number.isFinite(ts) ? ts : 0;
+                };
+                const historyRaw = Array.isArray(cr?.history) ? cr!.history : [];
+                const history = [...historyRaw].sort((a: any, b: any) => toTs(a?.date || a?.updatedAt || a?.createdAt || '') - toTs(b?.date || b?.updatedAt || b?.createdAt || ''));
+                const rows = (() => {
+                  const result: any[] = [];
+                  let pendingDone: any = null;
+
+                  history.forEach((h: any) => {
+                    const hasStatus = !!h?.status;
+                    const doneByValue = String(h?.cookingDoneBy || '').trim();
+                    const doneDateValue = h?.doneDate || h?.cookingDoneAt || h?.submittedAt || h?.date || null;
+
+                    if (!hasStatus && doneByValue) {
+                      pendingDone = {
+                        doneBy: doneByValue,
+                        doneDate: doneDateValue,
+                        remarks: String(h?.remarks || '').trim()
+                      };
+                      return;
+                    }
+
+                    if (hasStatus) {
+                      result.push({
+                        status: normalizeCookingStatus(h.status),
+                        doneBy: pendingDone?.doneBy || doneByValue || String(cr?.cookingDoneBy || '').trim(),
+                        doneDate: pendingDone?.doneDate || doneDateValue,
+                        approvedBy: String(h?.approvedBy || h?.cookingApprovedBy || cr?.cookingApprovedBy || '').trim(),
+                        approvedDate: h?.approvedDate || h?.cookingApprovedAt || h?.date || null,
+                        remarks: String(h?.remarks || '').trim()
+                      });
+                      pendingDone = null;
+                    }
+                  });
+
+                  if (result.length === 0 && cr?.status) {
+                    result.push({
+                      status: normalizeCookingStatus(cr.status),
+                      doneBy: String(cr.cookingDoneBy || '').trim(),
+                      doneDate: (cr as any)?.doneDate || (cr as any)?.cookingDoneAt || (cr as any)?.date || cr.updatedAt || cr.createdAt || null,
+                      approvedBy: String(cr.cookingApprovedBy || '').trim(),
+                      approvedDate: (cr as any)?.approvedDate || (cr as any)?.cookingApprovedAt || (cr as any)?.date || cr.updatedAt || cr.createdAt || null,
+                      remarks: String(cr.remarks || '').trim()
+                    });
+                  }
+
+                  if (pendingDone) {
+                    result.push({
+                      status: 'Pending',
+                      doneBy: pendingDone.doneBy,
+                      doneDate: pendingDone.doneDate,
+                      approvedBy: '',
+                      approvedDate: null,
+                      remarks: pendingDone.remarks
+                    });
+                  }
+
+                  return result;
+                })();
 
                 return (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                    {history.length > 0 ? (
+                    {rows.length > 0 ? (
                       <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '10px', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
                         <div style={{ fontSize: '11px', color: '#64748b', fontWeight: '800', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '1px solid #e2e8f0', paddingBottom: '6px' }}>Cooking Activity Log</div>
                         <div style={{ overflowX: 'auto' }}>
@@ -3997,82 +4379,57 @@ const SampleEntryPage: React.FC<{
                                 <th style={{ textAlign: 'left', padding: '8px 4px', fontWeight: '800', border: '1px solid #e2e8f0' }}>Status</th>
                                 <th style={{ textAlign: 'left', padding: '8px 4px', fontWeight: '800', border: '1px solid #e2e8f0' }}>Done By</th>
                                 <th style={{ textAlign: 'left', padding: '8px 4px', fontWeight: '800', border: '1px solid #e2e8f0' }}>Approved By</th>
+                                <th style={{ textAlign: 'center', padding: '8px 4px', fontWeight: '800', width: '44px', border: '1px solid #e2e8f0' }}>Rem</th>
                               </tr>
                             </thead>
                             <tbody>
-                              {(() => {
-                                const rows = (() => {
-                                  const result: any[] = [];
-                                  let pendingDone: any = null;
-                                  history.forEach((h: any) => {
-                                    const hasStatus = !!h.status;
-                                    if (!hasStatus && h.cookingDoneBy) {
-                                      pendingDone = { doneBy: h.cookingDoneBy, doneDate: h.date || null };
-                                      return;
-                                    }
-                                    if (hasStatus) {
-                                      result.push({
-                                        status: h.status,
-                                        doneBy: pendingDone?.doneBy || h.cookingDoneBy || '',
-                                        doneDate: pendingDone?.doneDate || null,
-                                        approvedBy: h.approvedBy || '',
-                                        approvedDate: h.date || null,
-                                        remarks: h.remarks || null
-                                      });
-                                      pendingDone = null;
-                                    }
-                                  });
-                                  if (pendingDone) {
-                                    result.push({
-                                      status: null,
-                                      doneBy: pendingDone.doneBy,
-                                      doneDate: pendingDone.doneDate || null,
-                                      approvedBy: '',
-                                      approvedDate: null,
-                                      remarks: null
-                                    });
-                                  }
-                                  return result;
-                                })();
+                              {rows.map((h: any, idx: number) => {
+                                const statusString = String(h.status || 'Pending');
+                                const statusColor = statusString === 'Pass' ? '#166534' : statusString === 'Fail' ? '#991b1b' : statusString === 'Recheck' ? '#1565c0' : statusString === 'Medium' ? '#d97706' : '#475569';
+                                const statusBg = statusString === 'Pass' ? '#dcfce7' : statusString === 'Fail' ? '#fee2e2' : statusString === 'Recheck' ? '#e0f2fe' : statusString === 'Medium' ? '#ffedd5' : '#f1f5f9';
 
-                                return rows.map((h: any, idx: number) => {
-                                  const statusString = (h.status || 'Submitted').toLowerCase();
-                                  const statusColor = statusString === 'pass' ? '#166534' : statusString === 'fail' ? '#991b1b' : statusString === 'recheck' ? '#1565c0' : '#475569';
-                                  const statusBg = statusString === 'pass' ? '#dcfce7' : statusString === 'fail' ? '#fee2e2' : statusString === 'recheck' ? '#e0f2fe' : '#f1f5f9';
-
-                                  return (
-                                    <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                                      <td style={{ textAlign: 'center', padding: '8px 4px', fontWeight: '700', color: '#64748b', border: '1px solid #e2e8f0' }}>{idx + 1}.</td>
-                                      <td style={{ padding: '8px 4px', border: '1px solid #e2e8f0' }}>
-                                        <span style={{ background: statusBg, color: statusColor, padding: '2px 8px', borderRadius: '12px', fontSize: '10px', fontWeight: '800', textTransform: 'uppercase' }}>
-                                          {h.status ? toTitleCase(h.status) : 'Submitted'}
-                                        </span>
-                                      </td>
-                                      <td style={{ padding: '8px 4px', color: '#334155', border: '1px solid #e2e8f0' }}>
-                                        <div style={{ fontWeight: '700', fontSize: '12px' }}>{toTitleCase(h.doneBy || '-')}</div>
-                                        <div style={{ fontSize: '10px', color: '#64748b', fontWeight: '500', marginTop: '2px' }}>{formatShortDateTime(h.doneDate)}</div>
-                                      </td>
-                                      <td style={{ padding: '8px 4px', color: '#334155', border: '1px solid #e2e8f0' }}>
-                                        <div style={{ fontWeight: '700', fontSize: '12px' }}>{toTitleCase(h.approvedBy || '-')}</div>
-                                        <div style={{ fontSize: '10px', color: '#64748b', fontWeight: '500', marginTop: '2px' }}>{formatShortDateTime(h.approvedDate)}</div>
-                                      </td>
-                                    </tr>
-                                  );
-                                });
-                              })()}
+                                return (
+                                  <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                    <td style={{ textAlign: 'center', padding: '8px 4px', fontWeight: '700', color: '#64748b', border: '1px solid #e2e8f0' }}>{idx + 1}.</td>
+                                    <td style={{ padding: '8px 4px', border: '1px solid #e2e8f0' }}>
+                                      <span style={{ background: statusBg, color: statusColor, padding: '2px 8px', borderRadius: '12px', fontSize: '10px', fontWeight: '800' }}>
+                                        {statusString}
+                                      </span>
+                                    </td>
+                                    <td style={{ padding: '8px 4px', color: '#334155', border: '1px solid #e2e8f0' }}>
+                                      <div style={{ fontWeight: '700', fontSize: '12px' }}>{h.doneBy ? getCollectorLabel(String(h.doneBy)) : '-'}</div>
+                                      <div style={{ fontSize: '10px', color: '#64748b', fontWeight: '500', marginTop: '2px' }}>{formatShortDateTime(h.doneDate) || '-'}</div>
+                                    </td>
+                                    <td style={{ padding: '8px 4px', color: '#334155', border: '1px solid #e2e8f0' }}>
+                                      <div style={{ fontWeight: '700', fontSize: '12px' }}>{h.approvedBy ? getCollectorLabel(String(h.approvedBy)) : '-'}</div>
+                                      <div style={{ fontSize: '10px', color: '#64748b', fontWeight: '500', marginTop: '2px' }}>{formatShortDateTime(h.approvedDate) || '-'}</div>
+                                    </td>
+                                    <td style={{ padding: '8px 4px', border: '1px solid #e2e8f0', textAlign: 'center' }}>
+                                      {h.remarks ? (
+                                        <button
+                                          onClick={() => setRemarksPopup({ isOpen: true, text: String(h.remarks || '') })}
+                                          style={{ border: '1px solid #90caf9', background: '#e3f2fd', color: '#1565c0', borderRadius: '6px', padding: '2px 8px', cursor: 'pointer', fontSize: '11px', fontWeight: '700' }}
+                                        >
+                                          🔍
+                                        </button>
+                                      ) : '-'}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
                             </tbody>
                           </table>
                         </div>
                       </div>
                     ) : (
-                      <div style={{ background: '#fff9f0', padding: '10px', borderRadius: '8px', border: '1px solid #ffe0b2', textAlign: 'center', fontSize: '12px', color: '#e65100' }}>
-                        No cooking history recorded yet.
-                      </div>
+                      <div style={{ color: '#94a3b8', fontSize: '13px', fontStyle: 'italic' }}>No cooking history available.</div>
                     )}
-
                   </div>
                 );
               })()}
+
+                </div>
+              </div>
 
               <button onClick={() => setDetailEntry(null)}
                 style={{ marginTop: '20px', width: '100%', padding: '12px', backgroundColor: '#e74c3c', color: 'white', border: 'none', borderRadius: '6px', fontSize: '14px', fontWeight: '800', cursor: 'pointer', boxShadow: '0 4px 12px rgba(231, 76, 60, 0.2)' }}>

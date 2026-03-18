@@ -598,16 +598,32 @@ router.get('/tabs/loading-lots', authenticateToken, cacheMiddleware(30), async (
               'bend1', 'bend2', 'mix', 'kandu', 'oil', 'sk', 'grainsCount',
               'wbR', 'wbBk', 'wbT', 'paddyWb', 'gramsReport', 'createdAt', 'updatedAt'
             ],
+            include: [
+              {
+                model: User,
+                as: 'reportedByUser',
+                attributes: ['id', 'username', 'fullName'],
+                required: false
+              }
+            ],
             required: false
           },
           {
             model: CookingReport,
             as: 'cookingReport',
             attributes: ['id', 'status', 'remarks', 'cookingDoneBy', 'cookingApprovedBy', 'history', 'updatedAt', 'createdAt'],
+            include: [
+              {
+                model: User,
+                as: 'reviewedBy',
+                attributes: ['id', 'username', 'fullName'],
+                required: false
+              }
+            ],
             required: false
           },
           { model: SampleEntryOffering, as: 'offering' },
-          { model: User, as: 'creator', attributes: ['id', 'username'] }
+          { model: User, as: 'creator', attributes: ['id', 'username', 'fullName'] }
         ],
         subQuery: false
       }
@@ -656,18 +672,34 @@ router.get('/tabs/resample-assignments', authenticateToken, cacheMiddleware(30),
       hydrateOptions: {
         attributes: [
           'id', 'serialNo', 'entryDate', 'brokerName', 'variety', 'partyName', 'location', 'bags',
-          'packaging', 'workflowStatus', 'createdAt', 'sampleCollectedBy', 'entryType',
-          'lorryNumber', 'lotSelectionDecision'
+          'packaging', 'workflowStatus', 'createdAt', 'updatedAt', 'sampleCollectedBy', 'entryType',
+          'lorryNumber', 'lotSelectionDecision', 'lotSelectionAt'
         ],
-        include: [],
+        include: [
+          {
+            model: QualityParameters,
+            as: 'qualityParameters',
+            attributes: ['id', 'createdAt', 'updatedAt'],
+            required: false
+          }
+        ],
         subQuery: false
       }
     });
 
+    const filteredEntries = result.entries.filter((entry) => {
+      const lotSelectionAt = entry.lotSelectionAt ? new Date(entry.lotSelectionAt).getTime() : 0;
+      if (!lotSelectionAt) return true;
+      const qualityAt = entry.qualityParameters
+        ? new Date(entry.qualityParameters.updatedAt || entry.qualityParameters.createdAt || 0).getTime()
+        : 0;
+      return !qualityAt || qualityAt < lotSelectionAt;
+    });
+
     if (result.pagination) {
-      res.json({ entries: result.entries, pagination: result.pagination });
+      res.json({ entries: filteredEntries, pagination: result.pagination });
     } else {
-      res.json({ entries: result.entries, total: result.total, page: parseInt(page, 10), pageSize: parseInt(pageSize, 10) });
+      res.json({ entries: filteredEntries, total: filteredEntries.length, page: parseInt(page, 10), pageSize: parseInt(pageSize, 10) });
     }
   } catch (error) {
     console.error('Error getting resample assignments:', error.message);
@@ -760,12 +792,28 @@ router.get('/tabs/final-pass-lots', authenticateToken, cacheMiddleware(15), asyn
           'wbRRaw', 'wbBkRaw', 'wbTRaw', 'paddyWbRaw',
           'updatedAt', 'createdAt'
         ],
+        include: [
+          {
+            model: User,
+            as: 'reportedByUser',
+            attributes: ['id', 'username', 'fullName'],
+            required: false
+          }
+        ],
         required: false
       },
       {
         model: CookingReport,
         as: 'cookingReport',
         attributes: ['id', 'status', 'remarks', 'cookingDoneBy', 'cookingApprovedBy', 'history', 'updatedAt'],
+        include: [
+          {
+            model: User,
+            as: 'reviewedBy',
+            attributes: ['id', 'username', 'fullName'],
+            required: false
+          }
+        ],
         required: false
       },
       {
@@ -786,7 +834,7 @@ router.get('/tabs/final-pass-lots', authenticateToken, cacheMiddleware(15), asyn
       {
         model: User,
         as: 'creator',
-        attributes: ['id', 'username'],
+        attributes: ['id', 'username', 'fullName'],
         required: false
       }
     ];
@@ -802,7 +850,7 @@ router.get('/tabs/final-pass-lots', authenticateToken, cacheMiddleware(15), asyn
       : { [Op.and]: conditionBlocks };
 
     const attributes = [
-      'id', 'serialNo', 'entryDate', 'createdAt', 'workflowStatus', 'lotSelectionDecision', 'lotSelectionAt',
+      'id', 'serialNo', 'entryDate', 'createdAt', 'updatedAt', 'workflowStatus', 'lotSelectionDecision', 'lotSelectionAt',
       'brokerName', 'variety', 'partyName', 'location', 'bags', 'packaging',
       'entryType', 'sampleCollectedBy', 'offeringPrice', 'finalPrice', 'lorryNumber'
     ];
@@ -1087,14 +1135,13 @@ router.put('/:id', authenticateToken, async (req, res) => {
           Object.prototype.hasOwnProperty.call(updates, 'sampleCollectedBy')
           && existingEntry.lotSelectionDecision === 'FAIL';
 
-        const mergedEntry = {
-          ...(existingEntry?.toJSON ? existingEntry.toJSON() : existingEntry),
-          ...updates
-        };
-        const requiredError = validateRequiredEntryFields(mergedEntry.entryType, mergedEntry);
-        if (requiredError) {
-          const isGpsError = requiredError === 'GPS coordinates are required';
-          if (!(isResampleAssignmentUpdate && isGpsError)) {
+        if (!isResampleAssignmentUpdate) {
+          const mergedEntry = {
+            ...(existingEntry?.toJSON ? existingEntry.toJSON() : existingEntry),
+            ...updates
+          };
+          const requiredError = validateRequiredEntryFields(mergedEntry.entryType, mergedEntry);
+          if (requiredError) {
             return res.status(400).json({ error: requiredError });
           }
         }

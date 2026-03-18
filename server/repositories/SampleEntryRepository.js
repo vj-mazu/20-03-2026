@@ -72,7 +72,7 @@ class SampleEntryRepository {
   _buildIncludesForRole(role, status) {
     // Core includes - always lightweight
     const baseIncludes = [
-      { model: User, as: 'creator', attributes: ['id', 'username'] }
+      { model: User, as: 'creator', attributes: ['id', 'username', 'fullName'] }
     ];
 
     // Staff needs quality parameters for Sample Book tab (to show 100gms / quality badges)
@@ -81,9 +81,12 @@ class SampleEntryRepository {
         ...baseIncludes,
         {
           model: QualityParameters, as: 'qualityParameters', required: false,
-          include: [{ model: User, as: 'reportedByUser', attributes: ['id', 'username'] }]
+          include: [{ model: User, as: 'reportedByUser', attributes: ['id', 'username', 'fullName'] }]
         },
-        { model: CookingReport, as: 'cookingReport', required: false }
+        { 
+          model: CookingReport, as: 'cookingReport', required: false,
+          include: [{ model: User, as: 'reviewedBy', attributes: ['id', 'username', 'fullName'] }]
+        }
       ];
     }
 
@@ -93,7 +96,7 @@ class SampleEntryRepository {
         ...baseIncludes,
         {
           model: QualityParameters, as: 'qualityParameters', required: false,
-          include: [{ model: User, as: 'reportedByUser', attributes: ['id', 'username'] }]
+          include: [{ model: User, as: 'reportedByUser', attributes: ['id', 'username', 'fullName'] }]
         }
       ];
     }
@@ -107,14 +110,17 @@ class SampleEntryRepository {
         ...baseIncludes,
         {
           model: QualityParameters, as: 'qualityParameters', required: false,
-          include: [{ model: User, as: 'reportedByUser', attributes: ['id', 'username'] }]
+          include: [{ model: User, as: 'reportedByUser', attributes: ['id', 'username', 'fullName'] }]
         },
-        { model: User, as: 'lotSelectionByUser', attributes: ['id', 'username'] }
+        { model: User, as: 'lotSelectionByUser', attributes: ['id', 'username', 'fullName'] }
       ];
 
       // Add cooking report for COOKING_REPORT status
       if (status === 'COOKING_REPORT' || status === 'FINAL_REPORT') {
-        includes.push({ model: CookingReport, as: 'cookingReport', required: false });
+        includes.push({ 
+          model: CookingReport, as: 'cookingReport', required: false,
+          include: [{ model: User, as: 'reviewedBy', attributes: ['id', 'username', 'fullName'] }]
+        });
       }
 
       // Add offering for FINAL_REPORT
@@ -134,39 +140,42 @@ class SampleEntryRepository {
    */
   _buildFullIncludes(role, userId) {
     return [
-      { model: User, as: 'creator', attributes: ['id', 'username'] },
+      { model: User, as: 'creator', attributes: ['id', 'username', 'fullName'] },
       {
         model: QualityParameters, as: 'qualityParameters', required: false,
-        include: [{ model: User, as: 'reportedByUser', attributes: ['id', 'username'] }]
+        include: [{ model: User, as: 'reportedByUser', attributes: ['id', 'username', 'fullName'] }]
       },
-      { model: User, as: 'lotSelectionByUser', attributes: ['id', 'username'] },
-      { model: CookingReport, as: 'cookingReport', required: false },
+      { model: User, as: 'lotSelectionByUser', attributes: ['id', 'username', 'fullName'] },
+      { 
+        model: CookingReport, as: 'cookingReport', required: false,
+        include: [{ model: User, as: 'reviewedBy', attributes: ['id', 'username', 'fullName'] }]
+      },
       {
         model: LotAllotment,
         as: 'lotAllotment',
         required: role === 'physical_supervisor',
         where: (role === 'physical_supervisor' && userId) ? { allottedToSupervisorId: userId } : undefined,
         include: [
-          { model: User, as: 'supervisor', attributes: ['id', 'username'] },
+          { model: User, as: 'supervisor', attributes: ['id', 'username', 'fullName'] },
           {
             model: PhysicalInspection,
             as: 'physicalInspections',
             required: false,
             include: [
-              { model: User, as: 'reportedBy', attributes: ['id', 'username'] },
+              { model: User, as: 'reportedBy', attributes: ['id', 'username', 'fullName'] },
               {
                 model: InventoryData,
                 as: 'inventoryData',
                 required: false,
                 include: [
-                  { model: User, as: 'recordedBy', attributes: ['id', 'username'] },
+                  { model: User, as: 'recordedBy', attributes: ['id', 'username', 'fullName'] },
                   {
                     model: FinancialCalculation,
                     as: 'financialCalculation',
                     required: false,
                     include: [
-                      { model: User, as: 'owner', attributes: ['id', 'username'] },
-                      { model: User, as: 'manager', attributes: ['id', 'username'] }
+                      { model: User, as: 'owner', attributes: ['id', 'username', 'fullName'] },
+                      { model: User, as: 'manager', attributes: ['id', 'username', 'fullName'] }
                     ]
                   },
                   { model: Kunchinittu, as: 'kunchinittu', required: false, include: [{ model: Variety, as: 'variety', attributes: ['id', 'name'] }] },
@@ -260,7 +269,7 @@ class SampleEntryRepository {
       ];
     } else if (requestedStatus === 'SAMPLE_BOOK') {
       // Staff view: Sample Book (completed/archived staff entries)
-      where.workflowStatus = { [Op.ne]: 'FAILED' };
+      where.workflowStatus = { [Op.ne]: 'STAFF_ENTRY' };
     } else if (requestedStatus) {
       if (requestedStatus === 'QUALITY_CHECK' && filters.entryType === 'RICE_SAMPLE') {
         where.workflowStatus = {

@@ -7,6 +7,8 @@ interface ResampleEntry {
   id: string;
   serialNo?: number;
   entryDate: string;
+  updatedAt?: string;
+  lotSelectionAt?: string;
   brokerName: string;
   partyName: string;
   lorryNumber?: string;
@@ -40,6 +42,16 @@ const getEntryTypeLabel = (entryType?: string) => {
   if (entryType === 'RICE_SAMPLE') return 'RS';
   return 'MS';
 };
+const getDisplayEntryType = (entry: ResampleEntry) => {
+  if (String(entry.lorryNumber || '').trim()) return 'RL';
+  return getEntryTypeLabel(entry.entryType);
+};
+const getDisplayPartyName = (entry: ResampleEntry) => {
+  const party = String(entry.partyName || '').trim();
+  if (party) return toTitleCase(party);
+  return entry.lorryNumber ? entry.lorryNumber.toUpperCase() : '-';
+};
+const getResampleDate = (entry: ResampleEntry) => entry.lotSelectionAt || entry.updatedAt || entry.entryDate;
 
 const ResampleAllotment: React.FC<ResampleAllotmentProps> = ({ entryType, excludeEntryType }) => {
   const { showNotification } = useNotification();
@@ -122,7 +134,7 @@ const ResampleAllotment: React.FC<ResampleAllotmentProps> = ({ entryType, exclud
   const groupedByDateBroker = useMemo(() => {
     const grouped: Record<string, Record<string, ResampleEntry[]>> = {};
     entries.forEach((entry) => {
-      const dateKey = new Date(entry.entryDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+      const dateKey = new Date(getResampleDate(entry)).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
       const brokerKey = entry.brokerName || 'Unknown';
       if (!grouped[dateKey]) grouped[dateKey] = {};
       if (!grouped[dateKey][brokerKey]) grouped[dateKey][brokerKey] = [];
@@ -210,16 +222,11 @@ const ResampleAllotment: React.FC<ResampleAllotmentProps> = ({ entryType, exclud
                           return (
                           <tr key={entry.id}>
                             <td style={{ border: '1px solid #000', padding: '3px 4px', textAlign: 'center', fontWeight: 700 }}>{entry.serialNo || (index + 1)}</td>
-                            <td style={{ border: '1px solid #000', padding: '3px 4px', textAlign: 'center' }}>{getEntryTypeLabel(entry.entryType)}</td>
+                            <td style={{ border: '1px solid #000', padding: '3px 4px', textAlign: 'center' }}>{getDisplayEntryType(entry)}</td>
                             <td style={{ border: '1px solid #000', padding: '3px 4px', textAlign: 'center' }}>{entry.bags?.toLocaleString('en-IN') || '-'}</td>
                             <td style={{ border: '1px solid #000', padding: '3px 4px', textAlign: 'center' }}>{entry.packaging || '-'}</td>
                             <td style={{ border: '1px solid #000', padding: '3px 4px', textAlign: 'left' }}>
-                              {(() => {
-                                const party = (entry.partyName || '').trim();
-                                const lorry = entry.lorryNumber ? entry.lorryNumber.toUpperCase() : '';
-                                if (party) return toTitleCase(party);
-                                return lorry || '-';
-                              })()}
+                              {getDisplayPartyName(entry)}
                             </td>
                             <td style={{ border: '1px solid #000', padding: '3px 4px', textAlign: 'left' }}>{toTitleCase(entry.location)}</td>
                             <td style={{ border: '1px solid #000', padding: '3px 4px', textAlign: 'left' }}>{toTitleCase(entry.variety)}</td>
@@ -245,7 +252,7 @@ const ResampleAllotment: React.FC<ResampleAllotmentProps> = ({ entryType, exclud
                                 onClick={() => handleAssign(entry)}
                                 style={{ padding: '3px 8px', background: assigned ? '#f39c12' : '#27ae60', color: 'white', border: 'none', borderRadius: '4px', fontSize: '11px', cursor: 'pointer', fontWeight: 700 }}
                               >
-                                {assigned ? 'Re-assign' : 'Assign'}
+                                {assigned ? 'Reassign' : 'Assign'}
                               </button>
                             </td>
                           </tr>

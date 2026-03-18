@@ -58,10 +58,16 @@ const toSentenceCase = (value: string) => {
   if (!normalized) return '';
   return normalized.charAt(0).toUpperCase() + normalized.slice(1);
 };
-const formatGramsReport = (value?: string): string => {
+  const formatGramsReport = (value?: string): string => {
   if (value === '5gms') return '5 gms';
   if (value === '10gms') return '10 gms';
   return '--';
+};
+const getSelectionDisplayDate = (entry: SampleEntry, selectionView: 'ALL' | 'RESAMPLE_PENDING') => {
+  if (selectionView === 'RESAMPLE_PENDING' && (entry as any).lotSelectionAt) {
+    return (entry as any).lotSelectionAt;
+  }
+  return entry.entryDate;
 };
 
 interface LotSelectionProps {
@@ -244,10 +250,10 @@ const LotSelection: React.FC<LotSelectionProps> = ({ entryType, excludeEntryType
   const groupedEntries = useMemo(() => {
     const filtered = selectionView === 'RESAMPLE_PENDING'
       ? entries.filter((entry) => entry.lotSelectionDecision === 'FAIL')
-      : entries;
+      : entries.filter((entry) => entry.lotSelectionDecision !== 'FAIL');
     const sorted = [...filtered].sort((a, b) => {
-      const dateA = new Date(a.entryDate).getTime();
-      const dateB = new Date(b.entryDate).getTime();
+      const dateA = new Date(getSelectionDisplayDate(a, selectionView)).getTime();
+      const dateB = new Date(getSelectionDisplayDate(b, selectionView)).getTime();
       if (dateA !== dateB) return dateB - dateA; // Primary sort: Date DESC
       const serialA = Number.isFinite(Number(a.serialNo)) ? Number(a.serialNo) : null;
       const serialB = Number.isFinite(Number(b.serialNo)) ? Number(b.serialNo) : null;
@@ -257,7 +263,7 @@ const LotSelection: React.FC<LotSelectionProps> = ({ entryType, excludeEntryType
 
     const grouped: Record<string, Record<string, typeof sorted>> = {};
     sorted.forEach(entry => {
-      const dateKey = new Date(entry.entryDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+      const dateKey = new Date(getSelectionDisplayDate(entry, selectionView)).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
       const brokerKey = entry.brokerName || 'Unknown';
       if (!grouped[dateKey]) grouped[dateKey] = {};
       if (!grouped[dateKey][brokerKey]) grouped[dateKey][brokerKey] = [];
@@ -379,7 +385,10 @@ const LotSelection: React.FC<LotSelectionProps> = ({ entryType, excludeEntryType
                         color: 'white', padding: '6px 10px', fontWeight: '700', fontSize: '14px',
                         textAlign: 'center', letterSpacing: '0.5px'
                       }}>
-                        {(() => { const d = new Date(brokerEntries[0]?.entryDate); return `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}-${d.getFullYear()}`; })()}
+                        {(() => {
+                          const d = new Date(getSelectionDisplayDate(brokerEntries[0], selectionView));
+                          return `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}-${d.getFullYear()}`;
+                        })()}
                         &nbsp;&nbsp;{entryType === 'RICE_SAMPLE' ? 'Rice Sample' : 'Paddy Sample'}
                       </div>}
                       {/* Broker name bar */}

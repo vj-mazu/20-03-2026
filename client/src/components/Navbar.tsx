@@ -237,6 +237,11 @@ const NotificationBadge = styled.span`
   margin-left: 4px;
 `;
 
+const ResampleBadge = styled(NotificationBadge)`
+  background: #f97316;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.18);
+`;
+
 const UserInfo = styled.div`
   color: white;
   font-size: 0.8rem;
@@ -299,6 +304,7 @@ const Navbar: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [pendingCount, setPendingCount] = useState(0);
+  const [resampleCount, setResampleCount] = useState(0);
   const [showApprovalModal, setShowApprovalModal] = useState(false);
   const [workflowDropdownOpen, setWorkflowDropdownOpen] = useState(false);
   const [ledgersDropdownOpen, setLedgersDropdownOpen] = useState(false);
@@ -330,8 +336,13 @@ const Navbar: React.FC = () => {
   useEffect(() => {
     if (user && (user.role === 'manager' || user.role === 'admin')) {
       fetchPendingCount();
+      fetchResampleCount();
       const interval = setInterval(fetchPendingCount, 30000);
-      return () => clearInterval(interval);
+      const resampleInterval = setInterval(fetchResampleCount, 30000);
+      return () => {
+        clearInterval(interval);
+        clearInterval(resampleInterval);
+      };
     }
   }, [user]);
 
@@ -342,6 +353,22 @@ const Navbar: React.FC = () => {
       setPendingCount(data.count || 0);
     } catch (error) {
       console.error('Error fetching pending count:', error);
+    }
+  };
+
+  const fetchResampleCount = async () => {
+    try {
+      const response = await axios.get('/sample-entries/tabs/resample-assignments', {
+        params: { page: 1, pageSize: 1 }
+      });
+      const data = response.data as { total?: number; entries?: unknown[] };
+      if (typeof data.total === 'number') {
+        setResampleCount(data.total);
+      } else {
+        setResampleCount(Array.isArray(data.entries) ? data.entries.length : 0);
+      }
+    } catch (error) {
+      console.error('Error fetching resample count:', error);
     }
   };
 
@@ -387,14 +414,20 @@ const Navbar: React.FC = () => {
           )}
           {user && user.role === 'manager' && (
             <>
-              <NavLink to="/paddy-sample-reports" $active={isActive('/paddy-sample-reports') || isActive('/owner-sample-reports')}>Paddy Sample Reports</NavLink>
+              <NavLink to="/paddy-sample-reports" $active={isActive('/paddy-sample-reports') || isActive('/owner-sample-reports')}>
+                Paddy Sample Reports
+                {resampleCount > 0 && <ResampleBadge>{resampleCount}</ResampleBadge>}
+              </NavLink>
               <NavLink to="/rice-sample-reports" $active={isActive('/rice-sample-reports')}>Rice Sample Reports</NavLink>
               <NavLink to="/sample-entry-ledger" $active={isActive('/sample-entry-ledger')}>Paddy Sample Book</NavLink>
             </>
           )}
           {user && user.role === 'admin' && (
             <>
-              <NavLink to="/paddy-sample-reports" $active={isActive('/paddy-sample-reports') || isActive('/owner-sample-reports')}>Paddy Sample Reports</NavLink>
+              <NavLink to="/paddy-sample-reports" $active={isActive('/paddy-sample-reports') || isActive('/owner-sample-reports')}>
+                Paddy Sample Reports
+                {resampleCount > 0 && <ResampleBadge>{resampleCount}</ResampleBadge>}
+              </NavLink>
               <NavLink to="/rice-sample-reports" $active={isActive('/rice-sample-reports')}>Rice Sample Reports</NavLink>
               <NavLink to="/arrivals" $active={isActive('/arrivals')}>Arrivals</NavLink>
               <NavLink to="/records" $active={isActive('/records')}>Records</NavLink>

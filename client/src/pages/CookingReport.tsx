@@ -20,9 +20,11 @@ interface SampleEntry {
   entryType?: string;
   lorryNumber?: string;
   sampleCollectedBy?: string;
+  sampleGivenToOffice?: boolean;
   lotSelectionDecision?: string;
   lotSelectionAt?: string;
   qualityReportAttempts?: number;
+  creator?: { id: number; username: string; fullName?: string };
   qualityParameters?: {
     grainsCount?: number;
     reportedBy?: string;
@@ -59,11 +61,59 @@ const getCollectorLabel = (value: string | null | undefined, supervisors: Superv
   if (match?.fullName) return toTitleCase(match.fullName);
   return toTitleCase(raw);
 };
+const getCreatorLabel = (entry: SampleEntry) => {
+  const creator = (entry as any)?.creator;
+  const raw = creator?.fullName || creator?.username || '';
+  return raw ? toTitleCase(raw) : '-';
+};
+const getCollectedByDisplay = (entry: SampleEntry, supervisors: SupervisorUser[]) => {
+  const creatorLabel = getCreatorLabel(entry);
+  const collectorLabel = getCollectorLabel(entry.sampleCollectedBy || null, supervisors);
+  const isGivenToOffice = Boolean((entry as any)?.sampleGivenToOffice);
+
+  if (isGivenToOffice) {
+    const primary = creatorLabel !== '-' ? creatorLabel : collectorLabel;
+    const secondary = collectorLabel !== '-' && collectorLabel !== primary ? collectorLabel : null;
+    return { primary, secondary, highlightPrimary: true };
+  }
+
+  return {
+    primary: collectorLabel !== '-' ? collectorLabel : creatorLabel,
+    secondary: null,
+    highlightPrimary: false
+  };
+};
 const toSentenceCase = (value: string) => {
   const normalized = String(value || '').trim().replace(/\s+/g, ' ').toLowerCase();
   if (!normalized) return '';
   return normalized.charAt(0).toUpperCase() + normalized.slice(1);
 };
+const toNumberText = (value: any, digits = 2) => {
+  const num = Number(value);
+  return Number.isFinite(num) ? num.toFixed(digits).replace(/\.00$/, '') : '-';
+};
+const formatIndianCurrency = (value: any) => {
+  const num = Number(value);
+  return Number.isFinite(num)
+    ? num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    : '-';
+};
+const formatRateUnitLabel = (value?: string) => value === 'per_quintal'
+  ? 'Per Qtl'
+  : value === 'per_ton'
+    ? 'Per Ton'
+    : value === 'per_kg'
+      ? 'Per Kg'
+      : 'Per Bag';
+const formatChargeUnitLabel = (value?: string) => value === 'per_quintal'
+  ? 'Per Qtl'
+  : value === 'percentage'
+    ? '%'
+    : value === 'lumps'
+      ? 'Lumps'
+      : value === 'per_kg'
+        ? 'Per Kg'
+        : 'Per Bag';
 const formatShortDateTime = (value?: string | null) => {
   if (!value) return '-';
   const dt = new Date(value);
@@ -75,10 +125,40 @@ const getPartyLabel = (entry: any) => {
   const lorry = entry?.lorryNumber ? String(entry.lorryNumber).toUpperCase() : '';
   return party ? toTitleCase(party) : (lorry || '-');
 };
+const getPartyDisplayParts = (entry: any) => {
+  const party = toTitleCase((entry?.partyName || '').trim());
+  const lorry = entry?.lorryNumber ? String(entry.lorryNumber).toUpperCase() : '';
+  return {
+    label: party || lorry || '-',
+    lorry,
+    showLorrySecondLine: entry?.entryType === 'DIRECT_LOADED_VEHICLE'
+      && !!party
+      && !!lorry
+      && party.toUpperCase() !== lorry
+  };
+};
 const getTimeValue = (value?: string | null) => {
   if (!value) return 0;
   const time = new Date(value).getTime();
   return Number.isFinite(time) ? time : 0;
+};
+const getEntrySmellLabel = (entry: any) => {
+  const attempts = Array.isArray(entry?.qualityAttemptDetails) ? entry.qualityAttemptDetails : [];
+  for (let idx = attempts.length - 1; idx >= 0; idx -= 1) {
+    const attempt = attempts[idx];
+    if (attempt?.smellHas || (attempt?.smellType && String(attempt.smellType).trim())) {
+      return toTitleCase(attempt.smellType || 'Yes');
+    }
+  }
+
+  const quality = entry?.qualityParameters;
+  if (quality?.smellHas || (quality?.smellType && String(quality.smellType).trim())) {
+    return toTitleCase(quality.smellType || 'Yes');
+  }
+  if (entry?.smellHas || (entry?.smellType && String(entry.smellType).trim())) {
+    return toTitleCase(entry.smellType || 'Yes');
+  }
+  return '-';
 };
 
 const splitHistoryByResampleStart = (entry: SampleEntry, history: any[]) => {
@@ -90,6 +170,18 @@ const splitHistoryByResampleStart = (entry: SampleEntry, history: any[]) => {
   const before = history.filter((item: any) => getTimeValue(item?.date) < startAt);
   const after = history.filter((item: any) => getTimeValue(item?.date) >= startAt);
   return { before, after, hasSplit: true };
+};
+const hasCurrentCycleQualityData = (entry: SampleEntry) => {
+  const quality = entry.qualityParameters as any;
+  const lotSelectionAt = getTimeValue(entry.lotSelectionAt);
+  if (!quality || !lotSelectionAt) return false;
+  const qualityAt = getTimeValue(quality.updatedAt || quality.createdAt || null);
+  return qualityAt >= lotSelectionAt;
+};
+const getCurrentCycleCookingHistory = (entry: SampleEntry, history: any[]) => {
+  if (entry.lotSelectionDecision !== 'FAIL') return history;
+  const { after, hasSplit } = splitHistoryByResampleStart(entry, history);
+  return hasSplit ? after : history;
 };
 
 const getSamplingLabel = (attemptNo: number) => {
@@ -749,6 +841,13 @@ const CookingReport: React.FC<CookingReportProps> = ({ entryType, excludeEntryTy
     if (isResampleCase) {
       const assignedUser = String(entry.sampleCollectedBy || '').trim().toLowerCase();
       if (!assignedUser) return { canAdd: false, reason: 'Awaiting Assign' };
+      const currentUser = String(user?.username || '').trim().toLowerCase();
+      if (currentUser && assignedUser !== currentUser) {
+        return { canAdd: false, reason: `Assigned to ${getCollectorLabel(entry.sampleCollectedBy || '-', supervisors)}` };
+      }
+      if (!hasCurrentCycleQualityData(entry)) {
+        return { canAdd: false, reason: 'Awaiting Quality' };
+      }
     }
 
     // Normal flow: one staff entry, then wait for admin.
@@ -815,7 +914,8 @@ const CookingReport: React.FC<CookingReportProps> = ({ entryType, excludeEntryTy
 
   const renderCookingDoneByWithDate = (entry: any, fallback: string) => {
     const cr = entry.cookingReport;
-    let cookings = (cr?.history || []).filter((h: any) => h.cookingDoneBy && !h.status);
+    const relevantHistory = getCurrentCycleCookingHistory(entry, Array.isArray(cr?.history) ? cr.history : []);
+    let cookings = relevantHistory.filter((h: any) => h.cookingDoneBy && !h.status);
 
     if (cookings.length === 0 && cr?.cookingDoneBy) {
       cookings = [{ cookingDoneBy: cr.cookingDoneBy, date: null }];
@@ -843,7 +943,8 @@ const CookingReport: React.FC<CookingReportProps> = ({ entryType, excludeEntryTy
 
   const renderApprovedByWithDate = (entry: any) => {
     const cr = entry.cookingReport || {};
-    let approvals = (cr?.history || []).filter((h: any) => h.approvedBy && h.status);
+    const relevantHistory = getCurrentCycleCookingHistory(entry, Array.isArray(cr?.history) ? cr.history : []);
+    let approvals = relevantHistory.filter((h: any) => h.approvedBy && h.status);
 
     if (approvals.length === 0 && cr?.cookingApprovedBy) {
       approvals = [{ approvedBy: cr.cookingApprovedBy, status: cr?.status, date: null, remarks: cr?.remarks }];
@@ -886,7 +987,11 @@ const CookingReport: React.FC<CookingReportProps> = ({ entryType, excludeEntryTy
   // We want to display all fetched entries since we need both pending and completed ones
   const displayEntries = useMemo(() => {
     if (activeTab !== 'RESAMPLE_COOKING_REPORT') return entries;
-    return entries.filter((entry) => !isResolvedResampleEntry(entry));
+    return entries.filter((entry) => {
+      if (isResolvedResampleEntry(entry)) return false;
+      if (!String(entry.sampleCollectedBy || '').trim()) return false;
+      return hasCurrentCycleQualityData(entry);
+    });
   }, [entries, activeTab]);
 
   const displayGrouped = useMemo(() => {
@@ -980,11 +1085,12 @@ const CookingReport: React.FC<CookingReportProps> = ({ entryType, excludeEntryTy
           .cooking-table .responsive-table.has-type td:nth-of-type(7):before { content: "Variety"; }
           .cooking-table .responsive-table.has-type td:nth-of-type(8):before { content: "Quality"; }
           .cooking-table .responsive-table.has-type td:nth-of-type(9):before { content: "Sample Report By"; }
-          .cooking-table .responsive-table.has-type td:nth-of-type(10):before { content: "Grain"; }
-          .cooking-table .responsive-table.has-type td:nth-of-type(11):before { content: "Cooking Done by"; }
-          .cooking-table .responsive-table.has-type td:nth-of-type(12):before { content: "Cooking Apprvd By"; }
-          .cooking-table .responsive-table.has-type td:nth-of-type(13):before { content: "Status"; }
-          .cooking-table .responsive-table.has-type td:nth-of-type(14):before { content: "Action"; }
+          .cooking-table .responsive-table.has-type td:nth-of-type(10):before { content: "Smell"; }
+          .cooking-table .responsive-table.has-type td:nth-of-type(11):before { content: "Grain"; }
+          .cooking-table .responsive-table.has-type td:nth-of-type(12):before { content: "Cooking Done by"; }
+          .cooking-table .responsive-table.has-type td:nth-of-type(13):before { content: "Cooking Apprvd By"; }
+          .cooking-table .responsive-table.has-type td:nth-of-type(14):before { content: "Status"; }
+          .cooking-table .responsive-table.has-type td:nth-of-type(15):before { content: "Action"; }
 
           /* Match columns mapping - Rice Cooking */
           .cooking-table .responsive-table.no-type td:nth-of-type(1):before { content: "SL No"; }
@@ -1171,6 +1277,9 @@ const CookingReport: React.FC<CookingReportProps> = ({ entryType, excludeEntryTy
                                   <th style={{ border: '1px solid #000', padding: '3px 4px', fontWeight: '600', fontSize: '13px', textAlign: 'left', width: '7%' }}>Variety</th>
                                   <th style={{ border: '1px solid #000', padding: '3px 4px', fontWeight: '600', fontSize: '13px', textAlign: 'center', width: '4%' }}>Quality</th>
                                   <th style={{ border: '1px solid #000', padding: '3px 4px', fontWeight: '600', fontSize: '13px', textAlign: 'center', width: '6%' }}>Sample Report By</th>
+                                  {(activeTab as string) !== 'RICE_COOKING_REPORT' && (
+                                    <th style={{ border: '1px solid #000', padding: '3px 4px', fontWeight: '600', fontSize: '13px', textAlign: 'center', width: '6%' }}>Smell</th>
+                                  )}
                                   <th style={{ border: '1px solid #000', padding: '3px 4px', fontWeight: '600', fontSize: '13px', textAlign: 'center', width: '4%' }}>G C</th>
                                   <th style={{ border: '1px solid #000', padding: '3px 4px', fontWeight: '600', fontSize: '13px', textAlign: 'center', width: '6%' }}>Cooking Done by</th>
                                   <th style={{ border: '1px solid #000', padding: '3px 4px', fontWeight: '600', fontSize: '13px', textAlign: 'center', width: '7%' }}>Cooking Apprvd By</th>
@@ -1204,13 +1313,7 @@ const CookingReport: React.FC<CookingReportProps> = ({ entryType, excludeEntryTy
                                       <td style={{ border: '1px solid #000', padding: '3px 4px', fontSize: '13px', textAlign: 'center' }}>{entry.packaging || '-'}</td>
                                       <td style={{ border: '1px solid #000', padding: '3px 4px', textAlign: 'left', fontSize: '14px', fontWeight: '600', color: '#1565c0' }}>
                                         {(() => {
-                                          const party = (entry.partyName || '').trim();
-                                          const lorry = entry.lorryNumber ? entry.lorryNumber.toUpperCase() : '';
-                                          const label = party ? toTitleCase(party) : (lorry || '-');
-                                          const showLorrySecondLine = entry.entryType === 'DIRECT_LOADED_VEHICLE'
-                                            && !!party
-                                            && !!lorry
-                                            && party.toUpperCase() !== lorry;
+                                          const partyDisplay = getPartyDisplayParts(entry);
                                           return (
                                             <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                                               <button
@@ -1218,10 +1321,10 @@ const CookingReport: React.FC<CookingReportProps> = ({ entryType, excludeEntryTy
                                                 onClick={() => handleOpenDetail(entry)}
                                                 style={{ background: 'transparent', border: 'none', color: '#1565c0', textDecoration: 'underline', cursor: 'pointer', fontWeight: '700', fontSize: '14px', padding: 0, textAlign: 'left' }}
                                               >
-                                                {label}
+                                                {partyDisplay.label}
                                               </button>
-                                              {showLorrySecondLine ? (
-                                                <div style={{ fontSize: '13px', color: '#1565c0', fontWeight: '600' }}>{lorry}</div>
+                                              {partyDisplay.showLorrySecondLine ? (
+                                                <div style={{ fontSize: '13px', color: '#1565c0', fontWeight: '600' }}>{partyDisplay.lorry}</div>
                                               ) : null}
                                             </div>
                                           );
@@ -1233,6 +1336,11 @@ const CookingReport: React.FC<CookingReportProps> = ({ entryType, excludeEntryTy
                                       <td style={{ border: '1px solid #000', padding: '3px 4px', textAlign: 'center', fontSize: '12px', fontWeight: '600' }}>
                                         {renderSampleReportByWithDate(entry)}
                                       </td>
+                                      {(activeTab as string) !== 'RICE_COOKING_REPORT' && (
+                                        <td style={{ border: '1px solid #000', padding: '3px 4px', textAlign: 'center', fontSize: '12px', fontWeight: '700', color: getEntrySmellLabel(entry) === '-' ? '#666' : '#8a4b00', whiteSpace: 'nowrap' }}>
+                                          {getEntrySmellLabel(entry)}
+                                        </td>
+                                      )}
                                       <td style={{ border: '1px solid #000', padding: '3px 4px', textAlign: 'center', fontSize: '13px', fontWeight: '700', color: '#333' }}>
                                         {(() => {
                                           const raw = entry.qualityParameters?.grainsCountRaw != null ? String(entry.qualityParameters.grainsCountRaw).trim() : '';
@@ -1388,17 +1496,20 @@ const CookingReport: React.FC<CookingReportProps> = ({ entryType, excludeEntryTy
                                       })()}</td>
                                       <td style={{ border: '1px solid #000', padding: '3px 4px', textAlign: 'left', fontSize: '14px', fontWeight: '600', color: '#1565c0' }}>
                                         {(() => {
-                                          const party = (entry.partyName || '').trim();
-                                          const lorry = entry.lorryNumber ? entry.lorryNumber.toUpperCase() : '';
-                                          const label = party ? toTitleCase(party) : (lorry || '-');
+                                          const partyDisplay = getPartyDisplayParts(entry);
                                           return (
-                                            <button
-                                              type="button"
-                                              onClick={() => handleOpenHistory(entry, 'all')}
-                                              style={{ background: 'transparent', border: 'none', color: '#1565c0', textDecoration: 'underline', cursor: 'pointer', fontWeight: '700', fontSize: '14px', padding: 0 }}
-                                            >
-                                              {label}
-                                            </button>
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                              <button
+                                                type="button"
+                                                onClick={() => handleOpenHistory(entry, 'all')}
+                                                style={{ background: 'transparent', border: 'none', color: '#1565c0', textDecoration: 'underline', cursor: 'pointer', fontWeight: '700', fontSize: '14px', padding: 0, textAlign: 'left' }}
+                                              >
+                                                {partyDisplay.label}
+                                              </button>
+                                              {partyDisplay.showLorrySecondLine ? (
+                                                <div style={{ fontSize: '13px', color: '#1565c0', fontWeight: '600' }}>{partyDisplay.lorry}</div>
+                                              ) : null}
+                                            </div>
                                           );
                                         })()}
                                       </td>
@@ -1680,7 +1791,8 @@ const CookingReport: React.FC<CookingReportProps> = ({ entryType, excludeEntryTy
             display: 'flex',
             justifyContent: 'center',
             alignItems: 'center',
-            zIndex: 1200
+            zIndex: 1200,
+            padding: '20px 16px'
           }}
           onClick={() => setDetailEntry(null)}
         >
@@ -1688,9 +1800,9 @@ const CookingReport: React.FC<CookingReportProps> = ({ entryType, excludeEntryTy
             style={{
               backgroundColor: 'white',
               borderRadius: '8px',
-              width: '500px',
-              maxWidth: '90vw',
-              maxHeight: '80vh',
+              width: '94vw',
+              maxWidth: '1180px',
+              maxHeight: '88vh',
               overflowY: 'auto',
               overflowX: 'hidden',
               boxShadow: '0 8px 32px rgba(0,0,0,0.3)'
@@ -1762,13 +1874,50 @@ const CookingReport: React.FC<CookingReportProps> = ({ entryType, excludeEntryTy
                 X
               </button>
             </div>
-            <div style={{ padding: '24px', backgroundColor: '#fff', borderBottomLeftRadius: '10px', borderBottomRightRadius: '10px' }}>
+            <div style={{ padding: '24px', backgroundColor: '#fff', borderBottomLeftRadius: '10px', borderBottomRightRadius: '10px', position: 'relative' }}>
               {detailLoading && (
                 <div style={{ padding: '12px 0', fontSize: '13px', color: '#666' }}>Loading details...</div>
               )}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '16px' }}>
+              {(() => {
+                const off = (detailEntry as any).offering;
+                if (!off) return null;
+                const pricingRows = [
+                  ['Offer Rate', off.offerBaseRateValue || off.offeringPrice
+                    ? `Rs ${toNumberText(off.offerBaseRateValue ?? off.offeringPrice)} / ${String(off.baseRateType || '').replace(/_/g, '/')} / ${formatRateUnitLabel(off.baseRateUnit)}`
+                    : '-'],
+                  ['Final Rate', off.finalPrice || off.finalBaseRate
+                    ? `Rs ${toNumberText(off.finalPrice ?? off.finalBaseRate)} / ${String(off.finalBaseRateType || off.baseRateType || '').replace(/_/g, '/')} / ${formatRateUnitLabel(off.finalBaseRateUnit || off.baseRateUnit)}`
+                    : '-'],
+                  ['Sute', off.finalSute || off.sute
+                    ? `${toNumberText(off.finalSute ?? off.sute)} / ${formatRateUnitLabel(off.finalSuteUnit || off.suteUnit)}`
+                    : '-'],
+                  ['Moisture', off.moistureValue ? `${toNumberText(off.moistureValue)}%` : '-'],
+                  ['Hamali', off.hamali ? `${toNumberText(off.hamali)} / ${formatChargeUnitLabel(off.hamaliUnit)}` : (off.hamaliEnabled ? 'Pending' : '-')],
+                  ['Brokerage', off.brokerage ? `${toNumberText(off.brokerage)} / ${formatChargeUnitLabel(off.brokerageUnit)}` : (off.brokerageEnabled ? 'Pending' : '-')],
+                  ['LF', off.lf ? `${toNumberText(off.lf)} / ${formatChargeUnitLabel(off.lfUnit)}` : (off.lfEnabled ? 'Pending' : '-')],
+                  ['CD', off.cdEnabled ? (off.cdValue ? `${toNumberText(off.cdValue)} / ${formatChargeUnitLabel(off.cdUnit)}` : 'Pending') : '-'],
+                  ['Bank Loan', off.bankLoanEnabled ? (off.bankLoanValue ? `Rs ${formatIndianCurrency(off.bankLoanValue)} / ${formatChargeUnitLabel(off.bankLoanUnit)}` : 'Pending') : '-'],
+                  ['Payment', off.paymentConditionValue ? `${off.paymentConditionValue} ${off.paymentConditionUnit === 'month' ? 'Month' : 'Days'}` : '-']
+                ];
+                if (pricingRows.every(([, value]) => value === '-')) return null;
+
+                return (
+                  <div style={{ position: 'absolute', top: 24, right: 24, width: 340, display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    <h4 style={{ margin: 0, fontSize: '13px', color: '#0f766e', borderBottom: '2px solid #0f766e', paddingBottom: '6px' }}>Pricing Details</h4>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '8px' }}>
+                      {pricingRows.map(([label, value]) => (
+                        <div key={label} style={{ background: '#f8fafc', padding: '10px 12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                          <div style={{ fontSize: '10px', color: '#64748b', marginBottom: '4px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</div>
+                          <div style={{ fontSize: '12px', fontWeight: '700', color: '#1e293b', lineHeight: '1.35', wordBreak: 'break-word' }}>{value}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px', marginBottom: '16px', maxWidth: 'calc(100% - 360px)' }}>
                 {[
-                  ['Entry Date', new Date(detailEntry.entryDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })],
+                  ['Date', new Date(detailEntry.entryDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })],
                   ['Total Bags', detailEntry.bags?.toLocaleString('en-IN')],
                   ['Packaging', `${detailEntry.packaging || '75'} Kg`],
                   ['Variety', toTitleCase(detailEntry.variety || '-')],
@@ -1779,10 +1928,20 @@ const CookingReport: React.FC<CookingReportProps> = ({ entryType, excludeEntryTy
                   </div>
                 ))}
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr', gap: '12px', marginBottom: '24px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px', marginBottom: '24px', maxWidth: 'calc(100% - 360px)' }}>
                 <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
                   <div style={{ fontSize: '10px', color: '#64748b', marginBottom: '4px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Party Name</div>
-                  <div style={{ fontSize: '15px', fontWeight: '700', color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{getPartyLabel(detailEntry)}</div>
+                  {(() => {
+                    const partyDisplay = getPartyDisplayParts(detailEntry);
+                    return (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', minWidth: 0 }}>
+                        <div style={{ fontSize: '15px', fontWeight: '700', color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{partyDisplay.label}</div>
+                        {partyDisplay.showLorrySecondLine ? (
+                          <div style={{ fontSize: '13px', fontWeight: '600', color: '#1565c0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{partyDisplay.lorry}</div>
+                        ) : null}
+                      </div>
+                    );
+                  })()}
                 </div>
                 <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
                   <div style={{ fontSize: '10px', color: '#64748b', marginBottom: '4px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Location</div>
@@ -1790,11 +1949,40 @@ const CookingReport: React.FC<CookingReportProps> = ({ entryType, excludeEntryTy
                 </div>
                 <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
                   <div style={{ fontSize: '10px', color: '#64748b', marginBottom: '4px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Collected By</div>
-                  <div style={{ fontSize: '14px', fontWeight: '700', color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{getCollectorLabel(detailEntry.sampleCollectedBy || '-', supervisors)}</div>
+                  {(() => {
+                    const collectedByDisplay = getCollectedByDisplay(detailEntry, supervisors);
+                    return (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                        <div style={{ fontSize: '14px', fontWeight: '700', color: collectedByDisplay.highlightPrimary ? '#ff9800' : '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {collectedByDisplay.primary}
+                        </div>
+                        {collectedByDisplay.secondary ? (
+                          <div style={{ fontSize: '12px', color: '#000', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {collectedByDisplay.secondary}
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  })()}
                 </div>
+                {(() => {
+                  const smellAttempts = Array.isArray((detailEntry as any).qualityAttemptDetails) ? (detailEntry as any).qualityAttemptDetails : [];
+                  const smellAttempt = [...smellAttempts].reverse().find((qp: any) => qp?.smellHas || (qp?.smellType && String(qp.smellType).trim()));
+                  const smellHasValue = smellAttempt?.smellHas ?? (detailEntry as any).smellHas;
+                  const smellTypeValue = smellAttempt?.smellType ?? (detailEntry as any).smellType;
+                  if (!(smellHasValue || (smellTypeValue && String(smellTypeValue).trim()))) return null;
+                  return (
+                    <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                      <div style={{ fontSize: '10px', color: '#64748b', marginBottom: '4px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Smell</div>
+                      <div style={{ fontSize: '14px', fontWeight: '700', color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{toTitleCase(smellTypeValue || 'Yes')}</div>
+                    </div>
+                  );
+                })()}
               </div>
 
-              <h4 style={{ margin: '0 0 10px', fontSize: '13px', color: '#e67e22', borderBottom: '2px solid #e67e22', paddingBottom: '6px' }}>Quality Parameters</h4>
+              <div style={{ display: 'grid', gridTemplateColumns: (Array.isArray((detailEntry as any).qualityAttemptDetails) && (detailEntry as any).qualityAttemptDetails.length > 1) ? 'minmax(0, 1fr)' : 'minmax(0, 1fr) 340px', gap: '20px', alignItems: 'flex-start' }}>
+                <div style={{ minWidth: 0 }}>
+                  <h4 style={{ margin: '0 0 10px', fontSize: '13px', color: '#e67e22', borderBottom: '2px solid #e67e22', paddingBottom: '6px' }}>Quality Parameters</h4>
               {(() => {
                 const qpList = (detailEntry as any).qualityAttemptDetails && (detailEntry as any).qualityAttemptDetails.length > 0
                   ? [...(detailEntry as any).qualityAttemptDetails].sort((a: any, b: any) => (a.attemptNo || 0) - (b.attemptNo || 0))
@@ -1835,6 +2023,118 @@ const CookingReport: React.FC<CookingReportProps> = ({ entryType, excludeEntryTy
                   );
                 };
                 const qualityPhotoUrl = qpList.find((qp: any) => qp?.uploadFileUrl)?.uploadFileUrl;
+                const hasMultipleAttempts = qpList.length > 1;
+                const getAttemptLabel = (attemptNo: number, idx: number) => {
+                  const num = attemptNo || idx + 1;
+                  if (num === 1) return '1st Sample';
+                  if (num === 2) return '2nd Sample';
+                  if (num === 3) return '3rd Sample';
+                  return `${num}th Sample`;
+                };
+
+                if (hasMultipleAttempts) {
+                  const columns = [
+                    { key: 'reportedBy', label: 'Sample Reported By' },
+                    { key: 'moisture', label: 'Moisture' },
+                    { key: 'cutting', label: 'Cutting' },
+                    { key: 'bend', label: 'Bend' },
+                    { key: 'grainsCount', label: 'Grains Count' },
+                    { key: 'mix', label: 'Mix' },
+                    { key: 'mixS', label: 'S Mix' },
+                    { key: 'mixL', label: 'L Mix' },
+                    { key: 'kandu', label: 'Kandu' },
+                    { key: 'oil', label: 'Oil' },
+                    { key: 'sk', label: 'SK' },
+                    { key: 'wbR', label: 'WB-R' },
+                    { key: 'wbBk', label: 'WB-BK' },
+                    { key: 'wbT', label: 'WB-T' },
+                    { key: 'smell', label: 'Smell' },
+                    { key: 'paddyWb', label: 'Paddy WB' }
+                  ];
+
+                  const getCellValue = (qp: any, key: string) => {
+                    const smixOn = isEnabled(qp.smixEnabled, qp.mixSRaw, qp.mixS);
+                    const lmixOn = isEnabled(qp.lmixEnabled, qp.mixLRaw, qp.mixL);
+                    const paddyOn = isEnabled(qp.paddyWbEnabled, qp.paddyWbRaw, qp.paddyWb);
+                    const wbOn = isProvided(qp.wbRRaw, qp.wbR) || isProvided(qp.wbBkRaw, qp.wbBk);
+                    if (key === 'reportedBy') return toTitleCase(qp.reportedBy || '-');
+                    if (key === 'moisture') {
+                      const val = displayVal(qp.moistureRaw, qp.moisture);
+                      return val ? `${val}%` : '-';
+                    }
+                    if (key === 'cutting') {
+                      const cut1 = displayVal(qp.cutting1Raw, qp.cutting1);
+                      const cut2 = displayVal(qp.cutting2Raw, qp.cutting2);
+                      return cut1 && cut2 ? `${cut1}x${cut2}` : '-';
+                    }
+                    if (key === 'bend') {
+                      const bend1 = displayVal(qp.bend1Raw, qp.bend1);
+                      const bend2 = displayVal(qp.bend2Raw, qp.bend2);
+                      return bend1 && bend2 ? `${bend1}x${bend2}` : '-';
+                    }
+                    if (key === 'grainsCount') {
+                      const val = displayVal(qp.grainsCountRaw, qp.grainsCount);
+                      return val ? `(${val})` : '-';
+                    }
+                    if (key === 'mix') return displayVal(qp.mixRaw, qp.mix) || '-';
+                    if (key === 'mixS') return displayVal(qp.mixSRaw, qp.mixS, smixOn) || '-';
+                    if (key === 'mixL') return displayVal(qp.mixLRaw, qp.mixL, lmixOn) || '-';
+                    if (key === 'kandu') return displayVal(qp.kanduRaw, qp.kandu) || '-';
+                    if (key === 'oil') return displayVal(qp.oilRaw, qp.oil) || '-';
+                    if (key === 'sk') return displayVal(qp.skRaw, qp.sk) || '-';
+                    if (key === 'wbR') return displayVal(qp.wbRRaw, qp.wbR, wbOn) || '-';
+                    if (key === 'wbBk') return displayVal(qp.wbBkRaw, qp.wbBk, wbOn) || '-';
+                    if (key === 'wbT') return displayVal(qp.wbTRaw, qp.wbT, wbOn) || '-';
+                    if (key === 'smell') {
+                      const smellHasValue = qp.smellHas ?? (detailEntry as any).smellHas;
+                      const smellTypeValue = qp.smellType ?? (detailEntry as any).smellType;
+                      return smellHasValue ? toTitleCase(smellTypeValue || 'Yes') : '-';
+                    }
+                    if (key === 'paddyWb') return displayVal(qp.paddyWbRaw, qp.paddyWb, paddyOn) || '-';
+                    return '-';
+                  };
+
+                  return (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                      {qualityPhotoUrl && (
+                        <div style={{ background: '#fff', border: '1px solid #e0e0e0', borderRadius: '8px', padding: '10px' }}>
+                          <div style={{ fontSize: '11px', fontWeight: '800', color: '#1d4ed8', marginBottom: '8px', textTransform: 'uppercase' }}>Quality Photo</div>
+                          <img
+                            src={`${API_URL.replace('/api', '')}${qualityPhotoUrl}`}
+                            alt="Quality"
+                            style={{ width: '100%', height: '200px', objectFit: 'cover', borderRadius: '6px', border: '1px solid #e0e0e0' }}
+                          />
+                        </div>
+                      )}
+                      <div style={{ overflowX: 'auto' }}>
+                        <table style={{ width: '100%', minWidth: '1180px', borderCollapse: 'collapse', fontSize: '12px' }}>
+                          <thead>
+                            <tr>
+                              <th style={{ border: '1px solid #e0e0e0', padding: '6px', background: '#f7f7f7', textAlign: 'left', whiteSpace: 'nowrap' }}>Sample</th>
+                              {columns.map((col) => (
+                                <th key={col.key} style={{ border: '1px solid #e0e0e0', padding: '6px', background: '#f7f7f7', textAlign: 'center', whiteSpace: 'nowrap' }}>{col.label}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {qpList.map((qp: any, idx: number) => (
+                              <tr key={`${qp.attemptNo || idx}-row`}>
+                                <td style={{ border: '1px solid #e0e0e0', padding: '6px', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                                  {getAttemptLabel(qp.attemptNo, idx)}
+                                </td>
+                                {columns.map((col) => (
+                                  <td key={`${qp.attemptNo || idx}-${col.key}`} style={{ border: '1px solid #e0e0e0', padding: '6px', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                                    {getCellValue(qp, col.key)}
+                                  </td>
+                                ))}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  );
+                }
 
                 return (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -1900,8 +2200,26 @@ const CookingReport: React.FC<CookingReportProps> = ({ entryType, excludeEntryTy
                       if (wbRVal) row4.push({ label: 'WB-R', value: wbRVal });
                       if (wbBkVal) row4.push({ label: 'WB-BK', value: wbBkVal });
                       if (wbTVal) row4.push({ label: 'WB-T', value: wbTVal });
+                      const smellHas = (qp as any).smellHas ?? (qpList.length === 1 ? (detailEntry as any).smellHas : undefined);
+                      const smellType = (qp as any).smellType ?? (qpList.length === 1 ? (detailEntry as any).smellType : undefined);
+                      if (smellHas || (smellType && String(smellType).trim())) {
+                        row4.push({ label: 'Smell', value: toTitleCase(smellType || 'Yes') });
+                      }
 
                       const hasPaddyWb = displayVal((qp as any).paddyWbRaw, qp.paddyWb, paddyOn);
+                      if (hasPaddyWb) {
+                        row4.push({
+                          label: 'Paddy WB',
+                          value: (
+                            <span style={{
+                              color: Number(qp.paddyWb) < 50 ? '#d32f2f' : (Number(qp.paddyWb) <= 50.5 ? '#f39c12' : '#1b5e20'),
+                              fontWeight: '800'
+                            }}>
+                              {hasPaddyWb}
+                            </span>
+                          )
+                        });
+                      }
 
                       return (
                         <div key={idx} style={qpList.length > 1 ? { background: '#fcfcfc', border: '1px solid #eee', borderRadius: '6px', padding: '12px' } : {}}>
@@ -1914,21 +2232,6 @@ const CookingReport: React.FC<CookingReportProps> = ({ entryType, excludeEntryTy
                           {row2.length > 0 && <div style={{ display: 'grid', gridTemplateColumns: `repeat(${row2.length}, 1fr)`, gap: '8px' }}>{row2.map(item => <QItem key={item.label} label={item.label} value={item.value} />)}</div>}
                           {row3.length > 0 && <div style={{ display: 'grid', gridTemplateColumns: `repeat(${row3.length}, 1fr)`, gap: '8px' }}>{row3.map(item => <QItem key={item.label} label={item.label} value={item.value} />)}</div>}
                           {row4.length > 0 && <div style={{ display: 'grid', gridTemplateColumns: `repeat(${row4.length}, 1fr)`, gap: '8px' }}>{row4.map(item => <QItem key={item.label} label={item.label} value={item.value} />)}</div>}
-                          {hasPaddyWb && (
-                            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '8px', marginTop: '10px' }}>
-                              <div style={{
-                                background: Number(qp.paddyWb) < 50 ? '#fff5f5' : (Number(qp.paddyWb) <= 50.5 ? '#fff9f0' : '#e8f5e9'),
-                                padding: '8px 10px',
-                                borderRadius: '6px',
-                                border: `1px solid ${Number(qp.paddyWb) < 50 ? '#feb2b2' : (Number(qp.paddyWb) <= 50.5 ? '#fbd38d' : '#c8e6c9')}`,
-                                textAlign: 'center',
-                                width: '32%'
-                              }}>
-                                <div style={{ fontSize: '10px', color: Number(qp.paddyWb) < 50 ? '#c53030' : (Number(qp.paddyWb) <= 50.5 ? '#9c4221' : '#2e7d32'), marginBottom: '2px', fontWeight: '600' }}>Paddy WB</div>
-                                <div style={{ fontSize: '13px', fontWeight: '800', color: Number(qp.paddyWb) < 50 ? '#d32f2f' : (Number(qp.paddyWb) <= 50.5 ? '#f39c12' : '#1b5e20') }}>{hasPaddyWb}</div>
-                              </div>
-                            </div>
-                          )}
                           {qp.reportedBy && (
                             <div style={{ marginTop: '8px' }}>
                               <div style={{ background: '#f8f9fa', padding: '8px 10px', borderRadius: '6px', border: '1px solid #e0e0e0', textAlign: 'center' }}>
@@ -1943,15 +2246,86 @@ const CookingReport: React.FC<CookingReportProps> = ({ entryType, excludeEntryTy
                   </div>
                 );
               })()}
-
-              <h4 style={{ margin: '16px 0 10px', fontSize: '13px', color: '#1565c0', borderBottom: '2px solid #1565c0', paddingBottom: '6px' }}>Cooking History & Remarks</h4>
+                </div>
+                <div style={{ minWidth: 0 }}>
+                  <h4 style={{ margin: '0 0 10px', fontSize: '13px', color: '#1565c0', borderBottom: '2px solid #1565c0', paddingBottom: '6px' }}>Cooking History & Remarks</h4>
               {(() => {
                 const cr = detailEntry.cookingReport;
-                const history = Array.isArray(cr?.history) ? cr!.history : [];
+                const normalizeCookingStatus = (status?: string | null) => {
+                  const normalized = String(status || '').trim().toUpperCase();
+                  if (normalized === 'PASS' || normalized === 'OK') return 'Pass';
+                  if (normalized === 'MEDIUM') return 'Medium';
+                  if (normalized === 'FAIL') return 'Fail';
+                  if (normalized === 'RECHECK') return 'Recheck';
+                  if (normalized === 'PENDING') return 'Pending';
+                  return normalized ? toTitleCase(normalized.toLowerCase()) : 'Pending';
+                };
+                const toTs = (value: any) => {
+                  if (!value) return 0;
+                  const ts = new Date(value).getTime();
+                  return Number.isFinite(ts) ? ts : 0;
+                };
+                const historyRaw = Array.isArray(cr?.history) ? cr!.history : [];
+                const history = [...historyRaw].sort((a: any, b: any) => toTs(a?.date || a?.updatedAt || a?.createdAt || '') - toTs(b?.date || b?.updatedAt || b?.createdAt || ''));
+                const rows = (() => {
+                  const result: any[] = [];
+                  let pendingDone: any = null;
+
+                  history.forEach((h: any) => {
+                    const hasStatus = !!h?.status;
+                    const doneByValue = String(h?.cookingDoneBy || '').trim();
+                    const doneDateValue = h?.doneDate || h?.cookingDoneAt || h?.submittedAt || h?.date || null;
+
+                    if (!hasStatus && doneByValue) {
+                      pendingDone = {
+                        doneBy: doneByValue,
+                        doneDate: doneDateValue,
+                        remarks: String(h?.remarks || '').trim()
+                      };
+                      return;
+                    }
+
+                    if (hasStatus) {
+                      result.push({
+                        status: normalizeCookingStatus(h.status),
+                        doneBy: pendingDone?.doneBy || doneByValue || String(cr?.cookingDoneBy || '').trim(),
+                        doneDate: pendingDone?.doneDate || doneDateValue,
+                        approvedBy: String(h?.approvedBy || h?.cookingApprovedBy || cr?.cookingApprovedBy || '').trim(),
+                        approvedDate: h?.approvedDate || h?.cookingApprovedAt || h?.date || null,
+                        remarks: String(h?.remarks || '').trim()
+                      });
+                      pendingDone = null;
+                    }
+                  });
+
+                  if (result.length === 0 && cr?.status) {
+                    result.push({
+                      status: normalizeCookingStatus(cr.status),
+                      doneBy: String(cr.cookingDoneBy || '').trim(),
+                      doneDate: (cr as any)?.doneDate || (cr as any)?.cookingDoneAt || (cr as any)?.date || cr.updatedAt || cr.createdAt || null,
+                      approvedBy: String(cr.cookingApprovedBy || '').trim(),
+                      approvedDate: (cr as any)?.approvedDate || (cr as any)?.cookingApprovedAt || (cr as any)?.date || cr.updatedAt || cr.createdAt || null,
+                      remarks: String(cr.remarks || '').trim()
+                    });
+                  }
+
+                  if (pendingDone) {
+                    result.push({
+                      status: 'Pending',
+                      doneBy: pendingDone.doneBy,
+                      doneDate: pendingDone.doneDate,
+                      approvedBy: '',
+                      approvedDate: null,
+                      remarks: pendingDone.remarks
+                    });
+                  }
+
+                  return result;
+                })();
 
                 return (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                    {history.length > 0 ? (
+                    {rows.length > 0 ? (
                       <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '10px', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
                         <div style={{ fontSize: '11px', color: '#64748b', fontWeight: '800', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '1px solid #e2e8f0', paddingBottom: '6px' }}>Cooking Activity Log</div>
                         <div style={{ overflowX: 'auto' }}>
@@ -1962,76 +2336,45 @@ const CookingReport: React.FC<CookingReportProps> = ({ entryType, excludeEntryTy
                                 <th style={{ textAlign: 'left', padding: '8px 4px', fontWeight: '800', border: '1px solid #e2e8f0' }}>Status</th>
                                 <th style={{ textAlign: 'left', padding: '8px 4px', fontWeight: '800', border: '1px solid #e2e8f0' }}>Done By</th>
                                 <th style={{ textAlign: 'left', padding: '8px 4px', fontWeight: '800', border: '1px solid #e2e8f0' }}>Approved By</th>
-                                <th style={{ textAlign: 'center', padding: '8px 4px', fontWeight: '800', width: '40px', border: '1px solid #e2e8f0' }}>Rem</th>
+                                <th style={{ textAlign: 'center', padding: '8px 4px', fontWeight: '800', width: '44px', border: '1px solid #e2e8f0' }}>Rem</th>
                               </tr>
                             </thead>
                             <tbody>
-                              {(() => {
-                                const rows: any[] = [];
-                                let pendingDone: any = null;
-                                history.forEach((h: any) => {
-                                  const hasStatus = !!h.status;
-                                  if (!hasStatus && h.cookingDoneBy) {
-                                    pendingDone = { doneBy: h.cookingDoneBy, doneDate: h.date || null };
-                                    return;
-                                  }
-                                  if (hasStatus) {
-                                    rows.push({
-                                      status: h.status,
-                                      doneBy: pendingDone?.doneBy || h.cookingDoneBy || '',
-                                      doneDate: pendingDone?.doneDate || null,
-                                      approvedBy: h.approvedBy || '',
-                                      approvedDate: h.date || null,
-                                      remarks: h.remarks || null
-                                    });
-                                    pendingDone = null;
-                                  }
-                                });
-                                if (pendingDone) {
-                                  rows.push({
-                                    status: null,
-                                    doneBy: pendingDone.doneBy,
-                                    doneDate: pendingDone.doneDate || null,
-                                    approvedBy: '',
-                                    approvedDate: null,
-                                    remarks: null
-                                  });
-                                }
-                                return rows.map((h: any, idx: number) => {
-                                  const statusString = (h.status || 'Submitted').toLowerCase();
-                                  const statusColor = statusString === 'pass' ? '#166534' : statusString === 'fail' ? '#991b1b' : statusString === 'recheck' ? '#1565c0' : '#475569';
-                                  const statusBg = statusString === 'pass' ? '#dcfce7' : statusString === 'fail' ? '#fee2e2' : statusString === 'recheck' ? '#e0f2fe' : '#f1f5f9';
-                                  return (
-                                    <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9', transition: 'background-color 0.2s' }}>
-                                      <td style={{ textAlign: 'center', padding: '8px 4px', fontWeight: '700', color: '#64748b', border: '1px solid #e2e8f0' }}>{idx + 1}.</td>
-                                      <td style={{ padding: '8px 4px', border: '1px solid #e2e8f0' }}>
-                                        <span style={{ background: statusBg, color: statusColor, padding: '2px 8px', borderRadius: '12px', fontSize: '10px', fontWeight: '800', textTransform: 'uppercase' }}>
-                                          {h.status ? toTitleCase(h.status) : 'Submitted'}
-                                        </span>
-                                      </td>
-                                      <td style={{ padding: '8px 4px', color: '#334155', border: '1px solid #e2e8f0' }}>
-                                        <div style={{ fontWeight: '700', fontSize: '13px' }}>{getCollectorLabel(h.doneBy || '-', supervisors)}</div>
-                                        <div style={{ fontSize: '10px', color: '#64748b', fontWeight: '500', marginTop: '2px' }}>{formatShortDateTime(h.doneDate)}</div>
-                                      </td>
-                                      <td style={{ padding: '8px 4px', color: '#334155', border: '1px solid #e2e8f0' }}>
-                                        <div style={{ fontWeight: '700', fontSize: '13px' }}>{toTitleCase(h.approvedBy || '-')}</div>
-                                        <div style={{ fontSize: '10px', color: '#64748b', fontWeight: '500', marginTop: '2px' }}>{formatShortDateTime(h.approvedDate)}</div>
-                                      </td>
-                                      <td style={{ textAlign: 'center', padding: '8px 4px', border: '1px solid #e2e8f0' }}>
-                                        {h.remarks ? (
-                                          <button
-                                            onClick={() => setRemarksPopup({ isOpen: true, text: h.remarks || '' })}
-                                            style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px', padding: 0 }}
-                                            title="View Remarks"
-                                          >
-                                            🔍
-                                          </button>
-                                        ) : '-'}
-                                      </td>
-                                    </tr>
-                                  );
-                                });
-                              })()}
+                              {rows.map((h: any, idx: number) => {
+                                const statusString = String(h.status || 'Pending');
+                                const statusColor = statusString === 'Pass' ? '#166534' : statusString === 'Fail' ? '#991b1b' : statusString === 'Recheck' ? '#1565c0' : statusString === 'Medium' ? '#d97706' : '#475569';
+                                const statusBg = statusString === 'Pass' ? '#dcfce7' : statusString === 'Fail' ? '#fee2e2' : statusString === 'Recheck' ? '#e0f2fe' : statusString === 'Medium' ? '#ffedd5' : '#f1f5f9';
+                                return (
+                                  <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9', transition: 'background-color 0.2s' }}>
+                                    <td style={{ textAlign: 'center', padding: '8px 4px', fontWeight: '700', color: '#64748b', border: '1px solid #e2e8f0' }}>{idx + 1}.</td>
+                                    <td style={{ padding: '8px 4px', border: '1px solid #e2e8f0' }}>
+                                      <span style={{ background: statusBg, color: statusColor, padding: '2px 8px', borderRadius: '12px', fontSize: '10px', fontWeight: '800' }}>
+                                        {statusString}
+                                      </span>
+                                    </td>
+                                    <td style={{ padding: '8px 4px', color: '#334155', border: '1px solid #e2e8f0' }}>
+                                      <div style={{ fontWeight: '700', fontSize: '13px' }}>{h.doneBy ? getCollectorLabel(h.doneBy, supervisors) : '-'}</div>
+                                      <div style={{ fontSize: '10px', color: '#64748b', fontWeight: '500', marginTop: '2px' }}>{formatShortDateTime(h.doneDate) || '-'}</div>
+                                    </td>
+                                    <td style={{ padding: '8px 4px', color: '#334155', border: '1px solid #e2e8f0' }}>
+                                      <div style={{ fontWeight: '700', fontSize: '13px' }}>{h.approvedBy ? getCollectorLabel(h.approvedBy, supervisors) : '-'}</div>
+                                      <div style={{ fontSize: '10px', color: '#64748b', fontWeight: '500', marginTop: '2px' }}>{formatShortDateTime(h.approvedDate) || '-'}</div>
+                                    </td>
+                                    <td style={{ textAlign: 'center', padding: '8px 4px', border: '1px solid #e2e8f0' }}>
+                                      {h.remarks ? (
+                                        <button
+                                          onClick={() => setRemarksPopup({ isOpen: true, text: h.remarks || '' })}
+                                          style={{ border: '1px solid #90caf9', background: '#e3f2fd', color: '#1565c0', borderRadius: '6px', padding: '2px 8px', cursor: 'pointer', fontSize: '11px', fontWeight: '700' }}
+                                          title="View Remarks"
+                                        >
+                                          🔍
+                                        </button>
+                                      ) : '-'}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+
                             </tbody>
                           </table>
                         </div>
@@ -2044,6 +2387,8 @@ const CookingReport: React.FC<CookingReportProps> = ({ entryType, excludeEntryTy
                   </div>
                 );
               })()}
+                </div>
+              </div>
 
               <button
                 onClick={() => setDetailEntry(null)}
@@ -2155,5 +2500,3 @@ const CookingReport: React.FC<CookingReportProps> = ({ entryType, excludeEntryTy
 };
 
 export default CookingReport;
-
-

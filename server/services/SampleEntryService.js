@@ -61,6 +61,45 @@ const normalizePaymentValue = (value, fallback = 15) => {
   const parsed = toNumberOrDefault(value, fallback);
   return Math.max(0, parsed);
 };
+const toTimeValue = (value) => {
+  if (!value) return 0;
+  const time = new Date(value).getTime();
+  return Number.isFinite(time) ? time : 0;
+};
+const hasAlphaOrPositiveValue = (value) => {
+  if (value === null || value === undefined || value === '') return false;
+  const raw = String(value).trim();
+  if (!raw) return false;
+  if (/[a-zA-Z]/.test(raw)) return true;
+  const num = Number(raw);
+  return Number.isFinite(num) && num !== 0;
+};
+const isProvidedNumericValue = (rawVal, valueVal) => {
+  const raw = rawVal !== null && rawVal !== undefined ? String(rawVal).trim() : '';
+  if (raw !== '') return true;
+  const num = Number(valueVal);
+  return Number.isFinite(num) && num > 0;
+};
+const isProvidedAlphaValue = (rawVal, valueVal) => {
+  const raw = rawVal !== null && rawVal !== undefined ? String(rawVal).trim() : '';
+  if (raw !== '') return true;
+  return hasAlphaOrPositiveValue(valueVal);
+};
+const hasQualitySnapshot = (attempt = {}) => {
+  const hasMoisture = isProvidedNumericValue(attempt.moistureRaw, attempt.moisture);
+  const hasGrains = isProvidedNumericValue(attempt.grainsCountRaw, attempt.grainsCount);
+  const hasDetailedQuality =
+    isProvidedNumericValue(attempt.cutting1Raw, attempt.cutting1) ||
+    isProvidedNumericValue(attempt.bend1Raw, attempt.bend1) ||
+    isProvidedAlphaValue(attempt.mixRaw, attempt.mix) ||
+    isProvidedAlphaValue(attempt.mixSRaw, attempt.mixS) ||
+    isProvidedAlphaValue(attempt.mixLRaw, attempt.mixL) ||
+    isProvidedAlphaValue(attempt.kanduRaw, attempt.kandu) ||
+    isProvidedAlphaValue(attempt.oilRaw, attempt.oil) ||
+    isProvidedAlphaValue(attempt.skRaw, attempt.sk);
+
+  return hasMoisture && (hasGrains || hasDetailedQuality);
+};
 
 const getOfferLabel = (key) => `Offer ${OFFER_KEYS.indexOf(key) + 1}`;
 
@@ -94,7 +133,7 @@ const ensureOfferVersions = (source = {}) => {
     offerRate: toNullableNumber(source.offerRate),
     sute: toNumberOrDefault(source.sute, 0),
     suteUnit: normalizeSuteUnit(source.suteUnit, 'per_ton'),
-    baseRateType: source.baseRateType || 'PD_LOOSE',
+    baseRateType: source.baseRateType || 'PD_WB',
     baseRateUnit: normalizeRateUnit(source.baseRateUnit, 'per_bag'),
     offerBaseRateValue: toNullableNumber(source.offerBaseRateValue),
     hamaliEnabled: toBoolean(source.hamaliEnabled, false),
@@ -112,10 +151,10 @@ const ensureOfferVersions = (source = {}) => {
     customDivisor: toNullableNumber(source.customDivisor),
     cdEnabled: toBoolean(source.cdEnabled, false),
     cdValue: toNumberOrDefault(source.cdValue, 0),
-    cdUnit: normalizeToggleUnit(source.cdUnit, 'lumps'),
+    cdUnit: normalizeToggleUnit(source.cdUnit, 'percentage'),
     bankLoanEnabled: toBoolean(source.bankLoanEnabled, false),
     bankLoanValue: toNumberOrDefault(source.bankLoanValue, 0),
-    bankLoanUnit: normalizeToggleUnit(source.bankLoanUnit, 'lumps'),
+    bankLoanUnit: normalizeToggleUnit(source.bankLoanUnit, 'per_bag'),
     paymentConditionValue: normalizePaymentValue(source.paymentConditionValue, 15),
     paymentConditionUnit: normalizePaymentUnit(source.paymentConditionUnit, 'days'),
     remarks: source.remarks || source.offeringRemarks || ''
@@ -139,7 +178,7 @@ const getActiveOffer = (versions = [], activeOfferKey) => {
 };
 
 const buildOfferPayload = (priceData, existingOffer = {}, slotKey) => {
-  const baseRateType = String(priceData.baseRateType || existingOffer.baseRateType || priceData.offerBaseRate || 'PD_LOOSE').trim().toUpperCase();
+  const baseRateType = String(priceData.baseRateType || existingOffer.baseRateType || priceData.offerBaseRate || 'PD_WB').trim().toUpperCase();
   const baseRateUnit = normalizeRateUnit(priceData.baseRateUnit || existingOffer.baseRateUnit || priceData.perUnit || 'per_bag');
   const hasLf = hasLfForRateType(baseRateType);
   const hasEgb = hasEgbForRateType(baseRateType);
@@ -183,10 +222,10 @@ const buildOfferPayload = (priceData, existingOffer = {}, slotKey) => {
     customDivisor,
     cdEnabled: toBoolean(priceData.cdEnabled, toBoolean(existingOffer.cdEnabled, false)),
     cdValue: toNumberOrDefault(priceData.cdValue ?? existingOffer.cdValue, 0),
-    cdUnit: normalizeToggleUnit(priceData.cdUnit || existingOffer.cdUnit || 'lumps', 'lumps'),
+    cdUnit: normalizeToggleUnit(priceData.cdUnit || existingOffer.cdUnit || 'percentage', 'percentage'),
     bankLoanEnabled: toBoolean(priceData.bankLoanEnabled, toBoolean(existingOffer.bankLoanEnabled, false)),
     bankLoanValue: toNumberOrDefault(priceData.bankLoanValue ?? existingOffer.bankLoanValue, 0),
-    bankLoanUnit: normalizeToggleUnit(priceData.bankLoanUnit || existingOffer.bankLoanUnit || 'lumps', 'lumps'),
+    bankLoanUnit: normalizeToggleUnit(priceData.bankLoanUnit || existingOffer.bankLoanUnit || 'per_bag', 'per_bag'),
     paymentConditionValue: normalizePaymentValue(priceData.paymentConditionValue ?? existingOffer.paymentConditionValue, 15),
     paymentConditionUnit: normalizePaymentUnit(priceData.paymentConditionUnit || existingOffer.paymentConditionUnit || 'days', 'days'),
     remarks: priceData.remarks ?? existingOffer.remarks ?? ''
@@ -199,7 +238,7 @@ const mirrorOfferToColumns = (offer) => {
       offerRate: null,
       sute: 0,
       suteUnit: 'per_ton',
-      baseRateType: 'PD_LOOSE',
+      baseRateType: 'PD_WB',
       baseRateUnit: 'per_bag',
       offerBaseRateValue: null,
       hamaliEnabled: false,
@@ -219,10 +258,10 @@ const mirrorOfferToColumns = (offer) => {
       customDivisor: null,
       cdEnabled: false,
       cdValue: 0,
-      cdUnit: 'lumps',
+      cdUnit: 'percentage',
       bankLoanEnabled: false,
       bankLoanValue: 0,
-      bankLoanUnit: 'lumps',
+      bankLoanUnit: 'per_bag',
       paymentConditionValue: 15,
       paymentConditionUnit: 'days'
     };
@@ -236,7 +275,7 @@ const mirrorOfferToColumns = (offer) => {
     offerRate: offer.offerBaseRateValue,
     sute: toNumberOrDefault(offer.sute, 0),
     suteUnit: normalizeSuteUnit(offer.suteUnit, 'per_ton'),
-    baseRateType: offer.baseRateType || 'PD_LOOSE',
+    baseRateType: offer.baseRateType || 'PD_WB',
     baseRateUnit: normalizeRateUnit(offer.baseRateUnit, 'per_bag'),
     offerBaseRateValue: toNullableNumber(offer.offerBaseRateValue),
     hamaliEnabled: toBoolean(offer.hamaliEnabled, false),
@@ -256,10 +295,10 @@ const mirrorOfferToColumns = (offer) => {
     customDivisor: toNullableNumber(offer.customDivisor),
     cdEnabled: toBoolean(offer.cdEnabled, false),
     cdValue: toNumberOrDefault(offer.cdValue, 0),
-    cdUnit: normalizeToggleUnit(offer.cdUnit, 'lumps'),
+    cdUnit: normalizeToggleUnit(offer.cdUnit, 'percentage'),
     bankLoanEnabled: toBoolean(offer.bankLoanEnabled, false),
     bankLoanValue: toNumberOrDefault(offer.bankLoanValue, 0),
-    bankLoanUnit: normalizeToggleUnit(offer.bankLoanUnit, 'lumps'),
+    bankLoanUnit: normalizeToggleUnit(offer.bankLoanUnit, 'per_bag'),
     paymentConditionValue: normalizePaymentValue(offer.paymentConditionValue, 15),
     paymentConditionUnit: normalizePaymentUnit(offer.paymentConditionUnit, 'days'),
     finalRemarks: offer.finalRemarks || ''
@@ -346,8 +385,49 @@ class SampleEntryService {
       const { attachLoadingLotsHistories } = require('../utils/historyUtil');
       result.entries = await attachLoadingLotsHistories(result.entries);
       const requestedStatus = String(filters.status || '').toUpperCase();
+      if (requestedStatus === 'MILL_SAMPLE' || requestedStatus === 'LOCATION_SAMPLE') {
+        result.entries = result.entries.filter((entry) => {
+          if (String(entry.lotSelectionDecision || '').toUpperCase() !== 'FAIL') return true;
+
+          const lotSelectionAt = toTimeValue(entry.lotSelectionAt);
+          if (!lotSelectionAt) return true;
+
+          const attempts = Array.isArray(entry.qualityAttemptDetails) ? entry.qualityAttemptDetails : [];
+          const hasCompletedResampleQuality = attempts.some((attempt) => {
+            const attemptTime = toTimeValue(attempt?.updatedAt || attempt?.createdAt);
+            return attemptTime >= lotSelectionAt && hasQualitySnapshot(attempt);
+          });
+
+          return !hasCompletedResampleQuality;
+        });
+      }
+      if (requestedStatus === 'PENDING_LOT_SELECTION') {
+        result.entries = result.entries.filter((entry) => {
+          if (String(entry.lotSelectionDecision || '').toUpperCase() !== 'FAIL') return true;
+
+          const lotSelectionAt = toTimeValue(entry.lotSelectionAt);
+          if (!lotSelectionAt) return false;
+
+          const attempts = Array.isArray(entry.qualityAttemptDetails) ? entry.qualityAttemptDetails : [];
+          return attempts.some((attempt) => {
+            const attemptTime = toTimeValue(attempt?.updatedAt || attempt?.createdAt);
+            return attemptTime > lotSelectionAt && hasQualitySnapshot(attempt);
+          });
+        });
+      }
       if (requestedStatus === 'COOKING_BOOK' || requestedStatus === 'RESAMPLE_COOKING_BOOK') {
         result.entries = result.entries.filter((entry) => !(entry.recheckRequested === true && entry.recheckType === 'quality'));
+      }
+      if (requestedStatus === 'RESAMPLE_COOKING_BOOK') {
+        result.entries = result.entries.filter((entry) => {
+          const assignedUser = String(entry.sampleCollectedBy || '').trim();
+          if (!assignedUser) return false;
+          const lotSelectionAt = entry.lotSelectionAt ? new Date(entry.lotSelectionAt).getTime() : 0;
+          if (!lotSelectionAt) return false;
+          const qualityUpdatedAt = entry.qualityParameters?.updatedAt || entry.qualityParameters?.createdAt || null;
+          const qualityTime = qualityUpdatedAt ? new Date(qualityUpdatedAt).getTime() : 0;
+          return qualityTime >= lotSelectionAt;
+        });
       }
     }
     return result;
@@ -496,7 +576,18 @@ class SampleEntryService {
     });
 
     if (!offering) {
-      throw new Error('Offering price must be set before adding final price');
+      offering = await SampleEntryOffering.create({
+        sampleEntryId: id,
+        offerVersions: [],
+        activeOfferKey: null,
+        ...mirrorOfferToColumns(null),
+        baseRateType: String(finalData.baseRateType || 'PD_WB').trim().toUpperCase(),
+        baseRateUnit: normalizeRateUnit(finalData.baseRateUnit || 'per_bag'),
+        cdUnit: normalizeToggleUnit(finalData.cdUnit || 'percentage', 'percentage'),
+        bankLoanUnit: normalizeToggleUnit(finalData.bankLoanUnit || 'per_bag', 'per_bag'),
+        createdBy: userId,
+        updatedBy: userId
+      });
     }
 
     const updates = { updatedBy: userId };
@@ -509,6 +600,7 @@ class SampleEntryService {
       if (finalData.moistureEnabled !== undefined) updates.moistureEnabled = finalData.moistureEnabled;
       if (finalData.finalPrice !== undefined) updates.finalPrice = finalData.finalPrice;
       if (finalData.finalBaseRate !== undefined) updates.finalBaseRate = finalData.finalBaseRate;
+      if (finalData.baseRateType !== undefined) updates.baseRateType = String(finalData.baseRateType || 'PD_WB').trim().toUpperCase();
       if (finalData.baseRateUnit !== undefined) updates.baseRateUnit = finalData.baseRateUnit;
       if (finalData.finalSute !== undefined) updates.finalSute = finalData.finalSute;
       if (finalData.finalSuteUnit !== undefined) updates.finalSuteUnit = finalData.finalSuteUnit;
@@ -548,6 +640,7 @@ class SampleEntryService {
       if (finalData.egbValue !== undefined) updates.egbValue = finalData.egbValue;
       if (finalData.egbType !== undefined) updates.egbType = finalData.egbType;
       if (finalData.finalBaseRate !== undefined) updates.finalBaseRate = finalData.finalBaseRate;
+      if (finalData.baseRateType !== undefined) updates.baseRateType = String(finalData.baseRateType || 'PD_WB').trim().toUpperCase();
       if (finalData.baseRateUnit !== undefined) updates.baseRateUnit = finalData.baseRateUnit;
       if (finalData.bankLoanEnabled !== undefined) updates.bankLoanEnabled = finalData.bankLoanEnabled;
       if (finalData.bankLoanValue !== undefined) updates.bankLoanValue = finalData.bankLoanValue;

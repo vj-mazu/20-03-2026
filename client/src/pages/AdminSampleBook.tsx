@@ -17,8 +17,9 @@ interface SampleEntry {
     qualityParameters?: any;
     cookingReport?: any;
     offering?: any;
-    creator?: { username: string };
+    creator?: { username: string; fullName?: string };
     sampleCollectedBy?: string;
+    sampleGivenToOffice?: boolean;
     lorryNumber?: string;
     supervisorName?: string;
 }
@@ -40,6 +41,19 @@ const toSentenceCase = (value: string) => {
     return normalized.charAt(0).toUpperCase() + normalized.slice(1);
 };
 
+const getCollectorLabel = (value?: string | null) => {
+    const raw = typeof value === 'string' ? value.trim() : '';
+    if (!raw) return '-';
+    if (raw.toLowerCase() === 'broker office sample') return 'Broker Office Sample';
+    return toTitleCase(raw);
+};
+
+const getCreatorLabel = (entry: SampleEntry) => {
+    const creator = (entry as any)?.creator;
+    const raw = creator?.fullName || creator?.username || '';
+    return raw ? toTitleCase(raw) : '-';
+};
+
 const AdminSampleBook: React.FC = () => {
     const [entries, setEntries] = useState<SampleEntry[]>([]);
     const [loading, setLoading] = useState(false);
@@ -50,6 +64,7 @@ const AdminSampleBook: React.FC = () => {
     const [selectedEntry, setSelectedEntry] = useState<SampleEntry | null>(null);
     const [showDetailModal, setShowDetailModal] = useState(false);
     const [detailMode, setDetailMode] = useState<'full' | 'quick'>('full');
+    const [remarksModal, setRemarksModal] = useState<{ isOpen: boolean; text: string }>({ isOpen: false, text: '' });
     const pageSize = 100;
 
     const fetchEntries = useCallback(async () => {
@@ -90,6 +105,7 @@ const AdminSampleBook: React.FC = () => {
             INVENTORY_ENTRY: { bg: '#f1f8e9', color: '#33691e', label: 'Inventory Entry' },
             COMPLETED: { bg: '#c8e6c9', color: '#1b5e20', label: 'Completed' },
             FAILED: { bg: '#ffcdd2', color: '#b71c1c', label: 'Failed' },
+            RESAMPLING: { bg: '#fff3e0', color: '#f57c00', label: 'Resampling' },
         };
         const c = colors[status] || { bg: '#f5f5f5', color: '#666', label: status.replace(/_/g, ' ') };
         return <span style={{ padding: '1px 6px', borderRadius: '10px', fontSize: '10px', fontWeight: '600', background: c.bg, color: c.color, whiteSpace: 'nowrap' }}>{c.label}</span>;
@@ -269,42 +285,235 @@ const AdminSampleBook: React.FC = () => {
                                     </td>
                                     <td style={{ border: '1px solid #000', padding: '3px 4px', textAlign: 'left', fontSize: '11px', whiteSpace: 'nowrap' }}>{toTitleCase(e.variety)}</td>
                                     <td style={{ border: '1px solid #000', padding: '3px 4px', textAlign: 'center', fontSize: '11px', whiteSpace: 'nowrap' }}>
-                                        {e.sampleCollectedBy ? (
+                                        {(e as any).sampleGivenToOffice ? (
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                                <div style={{ fontSize: '11px', fontWeight: '700', color: '#ff9800' }}>
+                                                    {getCreatorLabel(e)}
+                                                </div>
+                                                <div style={{ fontSize: '10px', color: '#000' }}>
+                                                    {getCollectorLabel(e.sampleCollectedBy)}
+                                                </div>
+                                            </div>
+                                        ) : (
                                             <span style={{ fontSize: '11px', color: '#666' }}>
-                                                {toTitleCase(e.sampleCollectedBy)}
+                                                {getCollectorLabel(e.sampleCollectedBy)}
                                             </span>
-                                        ) : e.creator?.username ? (
-                                            <span style={{ fontSize: '11px', fontWeight: '600', color: '#1565c0' }}>
-                                                {toTitleCase(e.creator.username)}
-                                            </span>
-                                        ) : '-'}
+                                        )}
                                     </td>
                                     <td style={{ border: '1px solid #000', padding: '3px 4px', textAlign: 'center', whiteSpace: 'nowrap' }}>
-                                        {hasQuality ? (
-                                            <span style={{ background: '#c8e6c9', color: '#2e7d32', padding: '1px 6px', borderRadius: '10px', fontSize: '10px', fontWeight: '600' }}>✓ Done</span>
-                                        ) : (
-                                            <span style={{ background: '#ffccbc', color: '#d84315', padding: '1px 6px', borderRadius: '10px', fontSize: '10px' }}>⏳ No Qlty</span>
-                                        )}
+                                        {(() => {
+                                            const qualityLines: React.ReactNode[] = [];
+                                            
+                                            // Line 1: Quality Done (if quality exists)
+                                            if (hasQuality) {
+                                                qualityLines.push(
+                                                    <div key="quality-done" style={{ fontSize: '10px', fontWeight: '600', color: '#27ae60', marginBottom: '2px' }}>
+                                                        ✓ Quality Done
+                                                    </div>
+                                                );
+                                            }
+                                            
+                                            // Line 2: Pending Sample Selection (if quality passed and lot selection pending)
+                                            if (hasQuality && e.workflowStatus === 'LOT_SELECTION') {
+                                                qualityLines.push(
+                                                    <div key="pending-selection" style={{ fontSize: '10px', fontWeight: '600', color: '#7b1fa2', marginBottom: '2px' }}>
+                                                        ⏳ Pending Sample Selection
+                                                    </div>
+                                                );
+                                            }
+                                            
+                                            // Line 3: Pass/Fail (if decision made)
+                                            if (hasQuality && e.lotSelectionDecision) {
+                                                if (e.lotSelectionDecision === 'PASS_WITH_COOKING' || e.lotSelectionDecision === 'PASS_WITHOUT_COOKING') {
+                                                    qualityLines.push(
+                                                        <div key="pass" style={{ fontSize: '10px', fontWeight: '600', color: '#27ae60' }}>
+                                                            ✓ Pass
+                                                        </div>
+                                                    );
+                                                } else if (e.lotSelectionDecision === 'FAIL') {
+                                                    qualityLines.push(
+                                                        <div key="fail" style={{ fontSize: '10px', fontWeight: '600', color: '#b71c1c' }}>
+                                                            ✕ Fail
+                                                        </div>
+                                                    );
+                                                }
+                                            }
+                                            
+                                            // If no quality data, show "No Qlty"
+                                            if (qualityLines.length === 0) {
+                                                return <span style={{ background: '#ffccbc', color: '#d84315', padding: '1px 6px', borderRadius: '10px', fontSize: '10px' }}>⏳ No Qlty</span>;
+                                            }
+                                            
+                                            return <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>{qualityLines}</div>;
+                                        })()}
                                     </td>
                                     <td style={{ border: '1px solid #000', padding: '3px 4px', textAlign: 'center', whiteSpace: 'nowrap' }}>{getDecisionBadge(e.lotSelectionDecision)}</td>
                                     <td style={{ border: '1px solid #000', padding: '3px 4px', textAlign: 'center', whiteSpace: 'nowrap' }}>
-                                        {e.lotSelectionDecision === 'SOLDOUT' ? (
-                                            <span style={{ background: '#800000', color: 'white', padding: '1px 6px', borderRadius: '10px', fontSize: '10px', fontWeight: '800' }}>SOLD OUT</span>
-                                        ) : hasCooking ? (
-                                            cr.status === 'FAIL' || e.workflowStatus === 'FAILED' ? (
-                                                <span style={{ background: '#ffcdd2', color: '#b71c1c', padding: '1px 6px', borderRadius: '10px', fontSize: '10px', fontWeight: '700' }}>✕ Failed</span>
-                                            ) : (
-                                                <span style={{ background: '#e8f5e9', color: '#2e7d32', padding: '1px 6px', borderRadius: '10px', fontSize: '10px', fontWeight: '700' }}>✓ Passed</span>
-                                            )
-                                        ) : (
-                                            <span style={{ background: '#ffe0b2', color: '#e65100', padding: '1px 6px', borderRadius: '10px', fontSize: '10px' }}>⏳ Pending</span>
-                                        )}
+                                        {(() => {
+                                            const cookingLines: React.ReactNode[] = [];
+                                            const hasRemarks = cr && cr.remarks && String(cr.remarks).trim();
+                                            
+                                            // SOLDOUT case
+                                            if (e.lotSelectionDecision === 'SOLDOUT') {
+                                                return <span style={{ background: '#800000', color: 'white', padding: '1px 6px', borderRadius: '10px', fontSize: '10px', fontWeight: '800' }}>SOLD OUT</span>;
+                                            }
+                                            
+                                            // Pass Without Cooking = no cooking needed, show dash
+                                            if (e.lotSelectionDecision === 'PASS_WITHOUT_COOKING') {
+                                                return <span style={{ color: '#999', fontSize: '10px' }}>-</span>;
+                                            }
+                                            
+                                            // Recheck scenario
+                                            const isRecheck = (e as any).cookingPending === true || ((e as any).recheckRequested === true && (e as any).recheckType === 'cooking');
+                                            if (isRecheck) {
+                                                return (
+                                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
+                                                        <span style={{ background: '#e3f2fd', color: '#1565c0', padding: '1px 6px', borderRadius: '10px', fontSize: '9px', fontWeight: '700' }}>Recheck</span>
+                                                    </div>
+                                                );
+                                            }
+                                            
+                                            // Resample scenario (FAIL decision but not hard failed)
+                                            const isResample = e.lotSelectionDecision === 'FAIL' && e.workflowStatus !== 'FAILED';
+                                            if (isResample && hasCooking) {
+                                                const result = String(cr.status).toLowerCase();
+                                                if (result === 'pass' || result === 'ok') {
+                                                    cookingLines.push(
+                                                        <div key="cook-pass" style={{ fontSize: '10px', fontWeight: '600', color: '#27ae60', marginBottom: '2px' }}>
+                                                            ✓ Pass
+                                                        </div>
+                                                    );
+                                                } else if (result === 'fail') {
+                                                    cookingLines.push(
+                                                        <div key="cook-fail" style={{ fontSize: '10px', fontWeight: '600', color: '#b71c1c', marginBottom: '2px' }}>
+                                                            ✕ Fail
+                                                        </div>
+                                                    );
+                                                } else if (result === 'medium') {
+                                                    cookingLines.push(
+                                                        <div key="cook-medium" style={{ fontSize: '10px', fontWeight: '600', color: '#f39c12', marginBottom: '2px' }}>
+                                                            ⚠ Medium
+                                                        </div>
+                                                    );
+                                                }
+                                                
+                                                // Add remarks icon if remarks exist
+                                                if (hasRemarks) {
+                                                    cookingLines.push(
+                                                        <button
+                                                            key="remarks-btn"
+                                                            type="button"
+                                                            onClick={() => setRemarksModal({ isOpen: true, text: String(cr.remarks || '') })}
+                                                            style={{ color: '#8e24aa', fontSize: '12px', fontWeight: '700', cursor: 'pointer', background: 'transparent', border: 'none', padding: 0 }}
+                                                        >
+                                                            🔍
+                                                        </button>
+                                                    );
+                                                }
+                                                
+                                                return <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>{cookingLines}</div>;
+                                            }
+                                            
+                                            // Normal cooking status
+                                            if (hasCooking) {
+                                                const result = String(cr.status).toLowerCase();
+                                                if (result === 'fail' || e.workflowStatus === 'FAILED') {
+                                                    cookingLines.push(
+                                                        <div key="cook-fail" style={{ fontSize: '10px', fontWeight: '600', color: '#b71c1c', marginBottom: '2px' }}>
+                                                            ✕ Failed
+                                                        </div>
+                                                    );
+                                                } else if (result === 'pass' || result === 'ok') {
+                                                    cookingLines.push(
+                                                        <div key="cook-pass" style={{ fontSize: '10px', fontWeight: '600', color: '#27ae60', marginBottom: '2px' }}>
+                                                            ✓ Passed
+                                                        </div>
+                                                    );
+                                                } else if (result === 'medium') {
+                                                    cookingLines.push(
+                                                        <div key="cook-medium" style={{ fontSize: '10px', fontWeight: '600', color: '#f39c12', marginBottom: '2px' }}>
+                                                            ⚠ Medium
+                                                        </div>
+                                                    );
+                                                }
+                                                
+                                                // Add remarks icon if remarks exist
+                                                if (hasRemarks) {
+                                                    cookingLines.push(
+                                                        <button
+                                                            key="remarks-btn"
+                                                            type="button"
+                                                            onClick={() => setRemarksModal({ isOpen: true, text: String(cr.remarks || '') })}
+                                                            style={{ color: '#8e24aa', fontSize: '12px', fontWeight: '700', cursor: 'pointer', background: 'transparent', border: 'none', padding: 0 }}
+                                                        >
+                                                            🔍
+                                                        </button>
+                                                    );
+                                                }
+                                                
+                                                return <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>{cookingLines}</div>;
+                                            }
+                                            
+                                            // No cooking data yet
+                                            return <span style={{ background: '#ffe0b2', color: '#e65100', padding: '1px 6px', borderRadius: '10px', fontSize: '10px' }}>⏳ Pending</span>;
+                                        })()}
                                     </td>
                                     <td style={{ border: '1px solid #000', padding: '3px 4px', textAlign: 'center', fontWeight: '700', fontSize: '11px', color: (hasFinal || offer?.finalBaseRate || offer?.offerBaseRateValue) ? '#1565c0' : '#999', whiteSpace: 'nowrap' }}>
                                         {hasFinal ? `₹${offer.finalPrice}` : offer?.finalBaseRate ? `₹${offer.finalBaseRate}` : offer?.offerBaseRateValue ? `₹${offer.offerBaseRateValue}` : '-'}
                                     </td>
                                     <td style={{ border: '1px solid #000', padding: '3px 4px', textAlign: 'center', whiteSpace: 'nowrap' }}>
-                                        {getStatusBadge(e.workflowStatus)}
+                                        {(() => {
+                                            const statuses: React.ReactNode[] = [];
+                                            
+                                            // Determine final status based on cooking result
+                                            const cookingResult = cr && cr.status ? String(cr.status).toLowerCase() : null;
+                                            const isCookingFail = cookingResult === 'fail' || e.workflowStatus === 'FAILED';
+                                            const isCookingPass = cookingResult === 'pass' || cookingResult === 'ok' || cookingResult === 'medium';
+                                            
+                                            // If cooking failed, show Failed status
+                                            if (isCookingFail) {
+                                                return <span style={{ background: '#ffcdd2', color: '#b71c1c', padding: '1px 6px', borderRadius: '10px', fontSize: '10px', fontWeight: '600' }}>Failed</span>;
+                                            }
+                                            
+                                            // If cooking passed, show Passed status
+                                            if (isCookingPass) {
+                                                return <span style={{ background: '#c8e6c9', color: '#1b5e20', padding: '1px 6px', borderRadius: '10px', fontSize: '10px', fontWeight: '600' }}>Passed</span>;
+                                            }
+                                            
+                                            // Line 1: Quality Completed (if quality exists)
+                                            if (hasQuality) {
+                                                statuses.push(
+                                                    <div key="quality" style={{ fontSize: '10px', fontWeight: '600', color: '#27ae60', marginBottom: '2px' }}>
+                                                        ✓ Quality Completed
+                                                    </div>
+                                                );
+                                            }
+                                            
+                                            // Line 2: Pending Sample Selection (if quality passed and lot selection pending)
+                                            if (hasQuality && e.workflowStatus === 'LOT_SELECTION') {
+                                                statuses.push(
+                                                    <div key="selection" style={{ fontSize: '10px', fontWeight: '600', color: '#7b1fa2', marginBottom: '2px' }}>
+                                                        ⏳ Pending Sample Selection
+                                                    </div>
+                                                );
+                                            }
+                                            
+                                            // Line 3: Resampling (if resample active)
+                                            if (e.lotSelectionDecision === 'FAIL' && e.workflowStatus !== 'FAILED') {
+                                                statuses.push(
+                                                    <div key="resample" style={{ fontSize: '10px', fontWeight: '600', color: '#f57c00' }}>
+                                                        🔄 Resampling
+                                                    </div>
+                                                );
+                                            }
+                                            
+                                            // If no progression to show, show current status badge
+                                            if (statuses.length === 0) {
+                                                return e.lotSelectionDecision === 'FAIL' && e.workflowStatus !== 'FAILED' ? getStatusBadge('RESAMPLING') : getStatusBadge(e.workflowStatus);
+                                            }
+                                            
+                                            return <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>{statuses}</div>;
+                                        })()}
                                     </td>
                                     <td style={{ border: '1px solid #000', padding: '3px 4px', textAlign: 'center', whiteSpace: 'nowrap' }}>
                                         <button
@@ -335,7 +544,7 @@ const AdminSampleBook: React.FC = () => {
             {
                 showDetailModal && selectedEntry && (
                     <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 9999, padding: '20px' }} onClick={() => { setShowDetailModal(false); setSelectedEntry(null); }}>
-                        <div style={{ backgroundColor: 'white', borderRadius: '8px', width: '95%', maxWidth: detailMode === 'full' ? '1200px' : '500px', maxHeight: '90vh', overflowY: 'auto', overflowX: 'hidden', boxShadow: '0 8px 32px rgba(0,0,0,0.3)', marginTop: '30px' }} onClick={e => e.stopPropagation()}>
+                        <div style={{ backgroundColor: 'white', borderRadius: '8px', width: '95%', maxWidth: '1200px', maxHeight: '90vh', overflowY: 'auto', overflowX: 'hidden', boxShadow: '0 8px 32px rgba(0,0,0,0.3)', marginTop: '30px' }} onClick={e => e.stopPropagation()}>
                             {/* Redesigned Header — Green Background, Aligned Items */}
                             <div style={{
                                 background: selectedEntry.entryType === 'DIRECT_LOADED_VEHICLE'
@@ -371,6 +580,30 @@ const AdminSampleBook: React.FC = () => {
                             </div>
 
                             <div style={{ padding: '16px 20px' }}>
+                                {/* Price Details at Top Right */}
+                                {selectedEntry.offering && (
+                                    <div style={{ 
+                                        position: 'absolute', 
+                                        top: '120px', 
+                                        right: '20px', 
+                                        background: '#e3f2fd', 
+                                        padding: '10px 14px', 
+                                        borderRadius: '8px',
+                                        border: '2px solid #1565c0',
+                                        minWidth: '180px',
+                                        boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                                    }}>
+                                        <div style={{ fontSize: '10px', color: '#666', fontWeight: '600', marginBottom: '4px' }}>OFFER RATE</div>
+                                        <div style={{ fontSize: '16px', fontWeight: '800', color: '#1565c0', marginBottom: '8px' }}>
+                                            {selectedEntry.offering.offerRate ? `₹${selectedEntry.offering.offerRate}` : '-'}
+                                        </div>
+                                        <div style={{ fontSize: '10px', color: '#666', fontWeight: '600', marginBottom: '4px' }}>FINAL PRICE</div>
+                                        <div style={{ fontSize: '18px', fontWeight: '900', color: '#27ae60' }}>
+                                            {selectedEntry.offering.finalPrice ? `₹${selectedEntry.offering.finalPrice}` : selectedEntry.offering.finalBaseRate ? `₹${selectedEntry.offering.finalBaseRate}` : '-'}
+                                        </div>
+                                    </div>
+                                )}
+
                                 {/* Entry Details — Date, Bags, Pack, Variety, Party, Location, Lorry, Sample Collected By */}
                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', marginBottom: '8px' }}>
                                     <DetailItem label="Date" value={new Date(selectedEntry.entryDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })} />
@@ -382,14 +615,43 @@ const AdminSampleBook: React.FC = () => {
                                     <DetailItem label="Party Name" value={selectedEntry.partyName || '-'} />
                                     <DetailItem label="Paddy Location" value={selectedEntry.location || '-'} />
                                     <DetailItem label="Lorry Number" value={(selectedEntry as any).lorryNumber || '-'} />
-                                    <DetailItem label="Sample Collected By" value={(selectedEntry as any).sampleCollectedBy || '-'} />
+                                    <DetailItem 
+                                        label="Sample Collected By" 
+                                        value={
+                                            (selectedEntry as any).sampleGivenToOffice ? (
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                                    <div style={{ fontWeight: '700', color: '#ff9800', fontSize: '13px' }}>
+                                                        {(() => {
+                                                            const creator = (selectedEntry as any)?.creator;
+                                                            const raw = creator?.fullName || creator?.username || '';
+                                                            return raw ? raw.replace(/\b\w/g, (c: string) => c.toUpperCase()) : '-';
+                                                        })()}
+                                                    </div>
+                                                    <div style={{ fontWeight: '600', color: '#333', fontSize: '12px' }}>
+                                                        {(() => {
+                                                            const collectedBy = (selectedEntry as any).sampleCollectedBy || '';
+                                                            return collectedBy ? collectedBy.replace(/\b\w/g, (c: string) => c.toUpperCase()) : '-';
+                                                        })()}
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                (() => {
+                                                    const collectedBy = (selectedEntry as any).sampleCollectedBy || '';
+                                                    return collectedBy ? collectedBy.replace(/\b\w/g, (c: string) => c.toUpperCase()) : '-';
+                                                })()
+                                            )
+                                        } 
+                                    />
                                 </div>
 
-                                {/* Quality Parameters — grouped rows, hide 0 values */}
-                                <h4 style={{ margin: '0 0 10px', fontSize: '14px', color: '#e67e22', borderBottom: '2px solid #e67e22', paddingBottom: '6px', fontWeight: '800' }}>
-                                    🔬 Quality Parameters {detailMode === 'full' ? 'History' : ''}
-                                </h4>
-                                {(() => {
+                                {/* Horizontal Layout: Quality Parameters (LEFT) and Cooking Report (RIGHT) */}
+                                <div style={{ display: 'flex', gap: '16px', marginTop: '12px' }}>
+                                    {/* LEFT SIDE: Quality Parameters */}
+                                    <div style={{ flex: 1 }}>
+                                        <h4 style={{ margin: '0 0 10px', fontSize: '14px', color: '#e67e22', borderBottom: '2px solid #e67e22', paddingBottom: '6px', fontWeight: '800' }}>
+                                            🔬 Quality Parameters {detailMode === 'full' ? 'History' : ''}
+                                        </h4>
+                                        {(() => {
                                     const qpList = (selectedEntry as any).qualityAttemptDetails && (selectedEntry as any).qualityAttemptDetails.length > 0
                                         ? [...(selectedEntry as any).qualityAttemptDetails].sort((a, b) => (a.attemptNo || 0) - (b.attemptNo || 0))
                                         : (selectedEntry.qualityParameters ? [selectedEntry.qualityParameters] : []);
@@ -561,24 +823,33 @@ const AdminSampleBook: React.FC = () => {
                                         </div>
                                     );
                                 })()}
+                                    </div>
 
-                                {/* Full mode: Cooking, Final Rate, Workflow */}
-                                {detailMode === 'full' && (
-                                    <>
-                                        {/* Cooking Report */}
-                                        <div style={{ marginTop: '16px' }}>
-                                            <h4 style={{ margin: '0 0 10px', fontSize: '13px', color: '#e65100', borderBottom: '2px solid #e65100', paddingBottom: '6px' }}>🍚 Cooking Report</h4>
-                                            {selectedEntry.cookingReport ? (
-                                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
+                                    {/* RIGHT SIDE: Cooking Report */}
+                                    <div style={{ flex: 1 }}>
+                                        <h4 style={{ margin: '0 0 10px', fontSize: '14px', color: '#e65100', borderBottom: '2px solid #e65100', paddingBottom: '6px', fontWeight: '800' }}>🍚 Cooking Report</h4>
+                                        {selectedEntry.cookingReport ? (
+                                            <div style={{ 
+                                                background: '#fff', 
+                                                border: '1.5px solid #e2e8f0', 
+                                                borderRadius: '8px', 
+                                                padding: '12px'
+                                            }}>
+                                                <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '8px' }}>
                                                     <DetailItem label="Status" value={selectedEntry.cookingReport.status === 'MEDIUM' ? 'PASS' : (selectedEntry.cookingReport.status || '-')} />
                                                     <DetailItem label="Cooking Result" value={selectedEntry.cookingReport.cookingResult || '-'} />
                                                     <DetailItem label="Recheck Count" value={selectedEntry.cookingReport.recheckCount ? String(selectedEntry.cookingReport.recheckCount) : '-'} />
                                                 </div>
-                                            ) : (
-                                                <p style={{ color: '#999', fontSize: '12px', fontStyle: 'italic' }}>Not added yet</p>
-                                            )}
-                                        </div>
+                                            </div>
+                                        ) : (
+                                            <p style={{ color: '#999', fontSize: '12px', fontStyle: 'italic' }}>Not added yet</p>
+                                        )}
+                                    </div>
+                                </div>
 
+                                {/* Full mode: Final Rate, Workflow (below horizontal section) */}
+                                {detailMode === 'full' && (
+                                    <>
                                         {/* Final Rate */}
                                         <div style={{ marginTop: '16px' }}>
                                             <h4 style={{ margin: '0 0 10px', fontSize: '13px', color: '#0d47a1', borderBottom: '2px solid #0d47a1', paddingBottom: '6px' }}>💰 Final Rate</h4>
@@ -633,6 +904,21 @@ const AdminSampleBook: React.FC = () => {
                     </div>
                 )
             }
+
+            {/* Remarks Modal */}
+            {remarksModal.isOpen && (
+                <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 10000 }} onClick={() => setRemarksModal({ isOpen: false, text: '' })}>
+                    <div style={{ backgroundColor: 'white', borderRadius: '8px', padding: '20px', maxWidth: '500px', width: '90%', boxShadow: '0 4px 16px rgba(0,0,0,0.2)' }} onClick={e => e.stopPropagation()}>
+                        <h3 style={{ margin: '0 0 12px', fontSize: '16px', fontWeight: '700', color: '#8e24aa' }}>🔍 Cooking Remarks</h3>
+                        <div style={{ padding: '12px', background: '#f8f9fa', borderRadius: '6px', border: '1px solid #e0e0e0', fontSize: '13px', lineHeight: '1.6', color: '#2c3e50', whiteSpace: 'pre-wrap' }}>
+                            {remarksModal.text || 'No remarks available'}
+                        </div>
+                        <button onClick={() => setRemarksModal({ isOpen: false, text: '' })} style={{ marginTop: '16px', width: '100%', padding: '8px', backgroundColor: '#8e24aa', color: 'white', border: 'none', borderRadius: '4px', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}>
+                            Close
+                        </button>
+                    </div>
+                </div>
+            )}
         </div >
     );
 };

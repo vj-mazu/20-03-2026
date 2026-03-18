@@ -64,6 +64,28 @@ const attachLoadingLotsHistories = async (rows) => {
     if (list.some((item) => String(item).toLowerCase() === lower)) return;
     list.push(normalized);
   };
+  const pushTimelineEntry = (list, value, date) => {
+    const normalized = typeof value === 'string' ? value.trim() : '';
+    if (!normalized) return;
+    const normalizedDate = date || null;
+    const lower = normalized.toLowerCase();
+    const existingIndex = list.findIndex((item) => String(item?.name || '').toLowerCase() === lower);
+    if (existingIndex >= 0) {
+      if (normalizedDate && (!list[existingIndex]?.date || new Date(normalizedDate).getTime() > new Date(list[existingIndex].date).getTime())) {
+        list[existingIndex] = {
+          ...list[existingIndex],
+          date: normalizedDate
+        };
+      }
+      return;
+    }
+    list.push({ name: normalized, date: normalizedDate });
+  };
+  const toTime = (value) => {
+    if (!value) return 0;
+    const time = new Date(value).getTime();
+    return Number.isFinite(time) ? time : 0;
+  };
   
   const buildQualityAttemptDetail = (source, fallbackCreatedAt) => {
     if (!source) return null;
@@ -111,7 +133,9 @@ const attachLoadingLotsHistories = async (rows) => {
       smellType: source.smellType ?? null
     };
 
-    const hasData = Object.values(detail).some((value) => value !== null && value !== '' && value !== undefined);
+    const hasData = hasQualityData(source)
+      || detail.smellHas === true
+      || (typeof detail.smellType === 'string' && detail.smellType.trim() !== '');
     return hasData ? detail : null;
   };
 
@@ -222,12 +246,14 @@ const attachLoadingLotsHistories = async (rows) => {
     
     // Extract sampleCollectedBy history
     const sampleCollectedHistory = [];
+    const sampleCollectedTimeline = [];
     sampleEntryAuditLogs.forEach((log) => {
       if (log.actionType !== 'WORKFLOW_TRANSITION') {
         const sampleCollectedBy = typeof log.newValues?.sampleCollectedBy === 'string'
           ? log.newValues.sampleCollectedBy.trim()
           : '';
         pushHistoryValue(sampleCollectedHistory, sampleCollectedBy);
+        pushTimelineEntry(sampleCollectedTimeline, sampleCollectedBy, log.createdAt || null);
       }
     });
 
@@ -237,9 +263,15 @@ const attachLoadingLotsHistories = async (rows) => {
 
     if (currentSampleCollectedBy) {
       pushHistoryValue(sampleCollectedHistory, currentSampleCollectedBy);
+    pushTimelineEntry(
+        sampleCollectedTimeline,
+        currentSampleCollectedBy,
+        row?.updatedAt || row?.lotSelectionAt || row?.createdAt || null
+      );
     }
 
     target.sampleCollectedHistory = sampleCollectedHistory;
+    target.sampleCollectedTimeline = sampleCollectedTimeline;
 
     const qualityId = row?.qualityParameters?.id;
     if (!qualityId) {
@@ -278,14 +310,17 @@ const attachLoadingLotsHistories = async (rows) => {
     );
     
     const qualityAttemptDetails = [];
+    const resampleStartTime = row?.lotSelectionDecision === 'FAIL' && row?.lotSelectionAt
+      ? toTime(row.lotSelectionAt)
+      : 0;
     
     if (transitionLogs.length > 0) {
       // Each transition marks the start of a new attempt.
       // If quality logs exist BEFORE the first transition, treat that as Attempt 1,
       // and shift transitions to define Attempt 2, 3, ...
 
-      const firstTransitionTime = new Date(transitionLogs[0].createdAt).getTime();
-      const hasPreTransitionLogs = auditLogs.some((qLog) => new Date(qLog.createdAt).getTime() < firstTransitionTime);
+      const firstTransitionTime = toTime(transitionLogs[0].createdAt);
+      const hasPreTransitionLogs = auditLogs.some((qLog) => toTime(qLog.createdAt) < firstTransitionTime);
       const attemptCount = transitionLogs.length + (hasPreTransitionLogs ? 1 : 0);
       const attempts = Array.from({ length: attemptCount }, () => []);
 
@@ -293,7 +328,7 @@ const attachLoadingLotsHistories = async (rows) => {
         if (hasPreTransitionLogs && timeMs < firstTransitionTime) return 0;
         const offset = hasPreTransitionLogs ? 1 : 0;
         for (let j = transitionLogs.length - 1; j >= 0; j--) {
-          const tTime = new Date(transitionLogs[j].createdAt).getTime();
+          const tTime = toTime(transitionLogs[j].createdAt);
           if (timeMs >= tTime) {
             return j + offset;
           }
@@ -302,7 +337,7 @@ const attachLoadingLotsHistories = async (rows) => {
       };
 
       auditLogs.forEach((qLog) => {
-        const qTime = new Date(qLog.createdAt).getTime();
+        const qTime = toTime(qLog.createdAt);
         const targetAttemptIdx = getAttemptIndexForTime(qTime);
         attempts[targetAttemptIdx].push(qLog);
       });
@@ -330,18 +365,25 @@ const attachLoadingLotsHistories = async (rows) => {
       // Always include current state as the latest attempt
       const currentDetail = buildQualityAttemptDetail(row.qualityParameters, row.qualityParameters?.updatedAt || row.qualityParameters?.createdAt);
       if (currentDetail) {
-        const currentTime = new Date(row.qualityParameters.updatedAt || row.qualityParameters.createdAt).getTime();
+        const currentTime = toTime(row.qualityParameters.updatedAt || row.qualityParameters.createdAt);
         const currentAttemptIdx = getAttemptIndexForTime(currentTime);
+        const hasExistingResampleAttempt = resampleStartTime > 0
+          && qualityAttemptDetails.some((item) => new Date(item.createdAt).getTime() >= resampleStartTime);
+        const shouldForceResampleAttempt = resampleStartTime > 0
+          && currentTime >= resampleStartTime
+          && !hasExistingResampleAttempt;
         
         // Find if we already have a record matching this specific bucket
         // If not, it's a new sequential attempt.
         const existingIdx = qualityAttemptDetails.findIndex((item) => {
           // Check if this item was built from logs that fall into the same bucket as the current data
-          const itemTime = new Date(item.createdAt).getTime();
+          const itemTime = toTime(item.createdAt);
           return getAttemptIndexForTime(itemTime) === currentAttemptIdx;
         });
 
-        if (existingIdx >= 0) {
+        if (shouldForceResampleAttempt) {
+          qualityAttemptDetails.push({ attemptNo: seqAttemptNo++, ...currentDetail });
+        } else if (existingIdx >= 0) {
           // Update the existing sequential attempt with the most recent live data
           qualityAttemptDetails[existingIdx] = { ...qualityAttemptDetails[existingIdx], ...currentDetail };
         } else {
@@ -356,6 +398,53 @@ const attachLoadingLotsHistories = async (rows) => {
       const fallbackDetail = buildQualityAttemptDetail(row.qualityParameters, row.createdAt);
       if (fallbackDetail) {
         qualityAttemptDetails.push({ attemptNo: 1, ...fallbackDetail });
+      }
+    }
+
+    if (resampleStartTime > 0 && row?.qualityParameters) {
+      const currentQualityTime = toTime(row.qualityParameters.updatedAt || row.qualityParameters.createdAt || 0);
+      const hasCurrentResampleAttempt = qualityAttemptDetails.some((item) => toTime(item.createdAt) >= resampleStartTime);
+
+      if (currentQualityTime >= resampleStartTime && !hasCurrentResampleAttempt) {
+        const currentDetail = buildQualityAttemptDetail(row.qualityParameters, row.qualityParameters?.updatedAt || row.qualityParameters?.createdAt);
+        if (currentDetail) {
+          qualityAttemptDetails.push({ attemptNo: qualityAttemptDetails.length + 1, ...currentDetail });
+        }
+      }
+
+      let previousDetail = null;
+      for (let idx = auditLogs.length - 1; idx >= 0; idx -= 1) {
+        const log = auditLogs[idx];
+        const logTime = toTime(log.createdAt);
+        if (logTime >= resampleStartTime) continue;
+        const detail = buildQualityAttemptDetail(log.newValues, log.createdAt);
+        if (detail) {
+          previousDetail = detail;
+          break;
+        }
+      }
+
+      const hasPreResampleAttempt = qualityAttemptDetails.some((item) => toTime(item.createdAt) < resampleStartTime);
+      if (!hasPreResampleAttempt) {
+        if (previousDetail) {
+          qualityAttemptDetails.unshift({ attemptNo: 1, ...previousDetail });
+          qualityAttemptDetails.forEach((item, index) => {
+            item.attemptNo = index + 1;
+          });
+        }
+      }
+
+      if (currentQualityTime >= resampleStartTime && previousDetail) {
+        const currentDetail = buildQualityAttemptDetail(row.qualityParameters, row.qualityParameters?.updatedAt || row.qualityParameters?.createdAt);
+        const rebuiltAttempts = [];
+        rebuiltAttempts.push({ attemptNo: 1, ...previousDetail });
+        if (currentDetail) {
+          rebuiltAttempts.push({ attemptNo: 2, ...currentDetail });
+        }
+        if (rebuiltAttempts.length >= 2) {
+          qualityAttemptDetails.length = 0;
+          rebuiltAttempts.forEach((item) => qualityAttemptDetails.push(item));
+        }
       }
     }
 

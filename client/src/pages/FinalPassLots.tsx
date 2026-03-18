@@ -22,6 +22,7 @@ interface SampleEntry {
   lotSelectionAt?: string;
   entryType?: string;
   sampleCollectedBy?: string;
+  sampleGivenToOffice?: boolean;
   offeringPrice?: number;
   lorryNumber?: string;
   offering?: any;
@@ -37,7 +38,7 @@ interface SampleEntry {
   finalPrice?: number;
   qualityParameters?: any;
   cookingReport?: any;
-  creator?: { id: number; username: string };
+  creator?: { id: number; username: string; fullName?: string };
   qualityReportAttempts?: number;
 }
 
@@ -161,6 +162,19 @@ const toSentenceCase = (value: string) => {
   if (!normalized) return '';
   return normalized.charAt(0).toUpperCase() + normalized.slice(1);
 };
+
+const getCollectorLabel = (value?: string | null) => {
+  const raw = typeof value === 'string' ? value.trim() : '';
+  if (!raw) return '-';
+  if (raw.toLowerCase() === 'broker office sample') return 'Broker Office Sample';
+  return toTitleCase(raw);
+};
+
+const getCreatorLabel = (entry: SampleEntry) => {
+  const creator = (entry as any)?.creator;
+  const raw = creator?.fullName || creator?.username || '';
+  return raw ? toTitleCase(raw) : '-';
+};
 const toNumberText = (value: any, digits = 2) => {
   const num = Number(value);
   return Number.isFinite(num) ? num.toFixed(digits).replace(/\.00$/, '') : '-';
@@ -254,7 +268,7 @@ const DEFAULT_PADDY_OFFER: OfferingData = {
   offerRate: '',
   sute: '',
   suteUnit: 'per_bag',
-  baseRateType: 'PD_LOOSE',
+  baseRateType: 'PD_WB',
   baseRateUnit: 'per_bag',
   offerBaseRateValue: '',
   hamaliEnabled: false,
@@ -285,7 +299,7 @@ const DEFAULT_FINAL_DATA: FinalPriceFormData = {
   finalSute: '',
   finalSuteUnit: 'per_ton',
   finalBaseRate: '',
-  baseRateType: 'PD_LOOSE',
+  baseRateType: 'PD_WB',
   baseRateUnit: 'per_bag',
   suteEnabled: false,
   moistureEnabled: false,
@@ -364,13 +378,43 @@ const getPartyNode = (entry: SampleEntry) => {
   }
   return lorry || '-';
 };
+const formatShortEntryDate = (value?: string | null) => {
+  if (!value) return '-';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '-';
+  return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+};
+const getResampleAssignmentTimeline = (entry: any) => {
+  const rawTimeline = Array.isArray(entry?.sampleCollectedTimeline) ? entry.sampleCollectedTimeline : [];
+  const normalized: Array<{ name: string; date: string | null }> = [];
+  rawTimeline.forEach((item: any) => {
+    const name = typeof item === 'string' ? item.trim() : String(item?.name || '').trim();
+    const date = typeof item === 'object' && item ? (item.date || null) : null;
+    if (!name) return;
+    const existingIndex = normalized.findIndex((row) => row.name.toLowerCase() === name.toLowerCase());
+    if (existingIndex >= 0) {
+      if (!normalized[existingIndex].date && date) {
+        normalized[existingIndex].date = date;
+      }
+      return;
+    }
+    normalized.push({ name, date });
+  });
+  if (normalized.length === 0) {
+    const fallbackName = String(entry?.sampleCollectedBy || '').trim();
+    if (fallbackName) {
+      normalized.push({ name: fallbackName, date: entry?.lotSelectionAt || null });
+    }
+  }
+  return normalized;
+};
 const buildOfferFormData = (offer?: Partial<OfferVersionData> | null): OfferingData => ({
   ...DEFAULT_PADDY_OFFER,
   offerRate: offer?.offerBaseRateValue?.toString() || '',
   offerBaseRateValue: offer?.offerBaseRateValue?.toString() || '',
   sute: offer?.sute?.toString() || '',
   suteUnit: offer?.suteUnit || 'per_bag',
-  baseRateType: offer?.baseRateType || 'PD_LOOSE',
+  baseRateType: offer?.baseRateType || 'PD_WB',
   baseRateUnit: offer?.baseRateUnit || 'per_bag',
   hamaliEnabled: !!offer?.hamaliEnabled,
   hamaliValue: toOptionalInputValue(offer?.hamali),
@@ -387,10 +431,10 @@ const buildOfferFormData = (offer?: Partial<OfferVersionData> | null): OfferingD
   customDivisor: offer?.customDivisor?.toString() || '',
   cdEnabled: !!offer?.cdEnabled,
   cdValue: toOptionalInputValue(offer?.cdValue),
-  cdUnit: offer?.cdUnit || 'lumps',
+  cdUnit: offer?.cdUnit || 'percentage',
   bankLoanEnabled: !!offer?.bankLoanEnabled,
   bankLoanValue: toOptionalInputValue(offer?.bankLoanValue),
-  bankLoanUnit: offer?.bankLoanUnit || 'lumps',
+  bankLoanUnit: offer?.bankLoanUnit || 'per_bag',
   paymentConditionEnabled: offer?.paymentConditionEnabled != null
     ? !!offer.paymentConditionEnabled
     : true,
@@ -586,10 +630,10 @@ const FinalPassLots: React.FC<FinalPassLotsProps> = ({ entryType, excludeEntryTy
   };
 
   const resetOfferData = (entry: SampleEntry) => {
-    const firstOffer = buildOfferFormData({
+      const firstOffer = buildOfferFormData({
       key: 'offer1',
       offerBaseRateValue: entry.offeringPrice,
-      baseRateType: entry.offerBaseRate || 'PD_LOOSE',
+      baseRateType: entry.offerBaseRate || 'PD_WB',
       baseRateUnit: entry.perUnit || 'per_bag'
     });
     setOfferVersions([]);
@@ -688,7 +732,7 @@ const FinalPassLots: React.FC<FinalPassLotsProps> = ({ entryType, excludeEntryTy
           finalSute: d.finalSute?.toString() || d.sute?.toString() || '',
           finalSuteUnit: d.finalSuteUnit || d.suteUnit || 'per_ton',
           finalBaseRate: d.finalBaseRate?.toString() || d.offerBaseRateValue?.toString() || '',
-          baseRateType: d.baseRateType || 'PD_LOOSE',
+          baseRateType: d.baseRateType || 'PD_WB',
           baseRateUnit: d.baseRateUnit || 'per_bag',
           suteEnabled: d.suteEnabled !== false,
           moistureEnabled: d.moistureEnabled !== false,
@@ -707,10 +751,10 @@ const FinalPassLots: React.FC<FinalPassLotsProps> = ({ entryType, excludeEntryTy
           customDivisor: d.customDivisor?.toString() || '',
           cdEnabled: d.cdEnabled || false,
           cdValue: toOptionalInputValue(d.cdValue),
-          cdUnit: d.cdUnit || 'lumps',
+          cdUnit: d.cdUnit || 'percentage',
           bankLoanEnabled: d.bankLoanEnabled || false,
           bankLoanValue: toOptionalInputValue(d.bankLoanValue),
-          bankLoanUnit: d.bankLoanUnit || 'lumps',
+          bankLoanUnit: d.bankLoanUnit || 'per_bag',
           paymentConditionEnabled: d.paymentConditionEnabled != null
             ? !!d.paymentConditionEnabled
             : true,
@@ -767,6 +811,7 @@ const FinalPassLots: React.FC<FinalPassLotsProps> = ({ entryType, excludeEntryTy
           finalSute: finalData.finalSute ? parseFloat(finalData.finalSute) : null,
           finalSuteUnit: finalData.finalSuteUnit,
           finalBaseRate: finalData.finalBaseRate ? parseFloat(finalData.finalBaseRate) : null,
+          baseRateType: finalData.baseRateType,
           baseRateUnit: finalData.baseRateUnit,
           suteEnabled: finalData.suteEnabled,
           moistureEnabled: finalData.moistureEnabled,
@@ -868,10 +913,7 @@ const FinalPassLots: React.FC<FinalPassLotsProps> = ({ entryType, excludeEntryTy
   const isFinalCustomDivisorVisible = finalData.baseRateUnit === 'per_kg';
   const visibleOfferKeys = OFFER_KEYS.filter((slotKey) => offerVersions.some((offer) => offer.key === slotKey) || slotKey === currentOfferKey);
   const canAddMoreOffers = OFFER_KEYS.some((slotKey) => !visibleOfferKeys.includes(slotKey));
-  const isOfferEditLocked = (
-    (currentOfferKey === 'offer1' && offerVersions.some((offer) => offer.key === 'offer2' || offer.key === 'offer3')) ||
-    (currentOfferKey === 'offer2' && offerVersions.some((offer) => offer.key === 'offer3'))
-  );
+  const isOfferEditLocked = false;
   const offerSummaryRows: Array<{ label: string; value: string }> = [
     { label: 'Offer Slot', value: getOfferLabel(currentOfferKey) },
     { label: 'Final Rate Uses', value: getOfferLabel(activeOfferKey) },
@@ -1036,12 +1078,6 @@ const FinalPassLots: React.FC<FinalPassLotsProps> = ({ entryType, excludeEntryTy
                     return new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime();
                   });
                   brokerSeq++;
-                  const resampleDates = brokerEntries
-                    .map((entry) => entry.lotSelectionAt)
-                    .filter(Boolean)
-                    .map((val) => new Date(val as string).getTime())
-                    .filter((time) => Number.isFinite(time));
-                  const latestResampleAt = resampleDates.length > 0 ? new Date(Math.max(...resampleDates)) : null;
                   return (
                     <div key={brokerName} style={{ marginBottom: '0px' }}>
                       {/* Date bar — only first broker */}
@@ -1049,14 +1085,11 @@ const FinalPassLots: React.FC<FinalPassLotsProps> = ({ entryType, excludeEntryTy
                         background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
                         color: 'white', padding: '6px 10px', fontWeight: '700', fontSize: '14px',
                         textAlign: 'center', letterSpacing: '0.5px', minWidth: tableMinWidth
-                      }}>
+                        }}>
                         {(() => {
                           const d = new Date(brokerEntries[0]?.entryDate);
                           const entryText = `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}-${d.getFullYear()}`;
-                          const resampleText = latestResampleAt
-                            ? ` | Resample Allotment: ${String(latestResampleAt.getDate()).padStart(2, '0')}-${String(latestResampleAt.getMonth() + 1).padStart(2, '0')}-${latestResampleAt.getFullYear()}`
-                            : '';
-                          return `Entry Date: ${entryText}${resampleText}`;
+                          return `Entry Date: ${entryText}`;
                         })()}
                         &nbsp;&nbsp;{entryType === 'RICE_SAMPLE' ? 'Rice Sample' : 'Paddy Sample'}
                       </div>}
@@ -1178,8 +1211,57 @@ const FinalPassLots: React.FC<FinalPassLotsProps> = ({ entryType, excludeEntryTy
                                     <td style={{ border: '1px solid #000', padding: '3px 5px', textAlign: 'left', fontWeight: '600', color: '#0d47a1' }}>{getPartyNode(entry)}</td>
                                     <td style={{ border: '1px solid #000', padding: '3px 5px', textAlign: 'left' }}>{toTitleCase(entry.location) || '-'}</td>
                                     <td style={{ border: '1px solid #000', padding: '3px 5px', textAlign: 'left' }}>{toTitleCase(entry.variety) || '-'}</td>
-                                    <td style={{ border: '1px solid #000', padding: '3px 5px', textAlign: 'left' }}>{entry.sampleCollectedBy || '-'}</td>
-                                    <td style={{ border: '1px solid #000', padding: '3px', textAlign: 'center' }}>{qp.grainsCount ? `(${qp.grainsCount})` : '-'}</td>
+                                    <td style={{ border: '1px solid #000', padding: '3px 5px', textAlign: 'left' }}>
+                                      {(entry as any).sampleGivenToOffice ? (
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                          <div style={{ fontSize: '11px', fontWeight: '700', color: '#ff9800' }}>
+                                            {getCreatorLabel(entry)}
+                                          </div>
+                                          <div style={{ fontSize: '10px', color: '#000' }}>
+                                            {getCollectorLabel(entry.sampleCollectedBy)}
+                                          </div>
+                                        </div>
+                                      ) : (
+                                        <span style={{ fontSize: '11px', color: '#666' }}>
+                                          {getCollectorLabel(entry.sampleCollectedBy)}
+                                        </span>
+                                      )}
+                                    </td>
+                                    <td style={{ border: '1px solid #000', padding: '3px', textAlign: 'center' }}>
+                                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+                                        <div>{qp.grainsCount ? `(${qp.grainsCount})` : '-'}</div>
+                                        {entry.lotSelectionDecision === 'FAIL' && (() => {
+                                          const assignmentTimeline = getResampleAssignmentTimeline(entry);
+                                          if (assignmentTimeline.length === 0) return null;
+                                          return (
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', width: '100%' }}>
+                                              {assignmentTimeline.map((item, assignmentIndex) => (
+                                                <div
+                                                  key={`${item.name}-${assignmentIndex}`}
+                                                  style={{
+                                                    background: assignmentIndex === assignmentTimeline.length - 1 ? '#fff3e0' : '#f8fafc',
+                                                    border: `1px solid ${assignmentIndex === assignmentTimeline.length - 1 ? '#ffcc80' : '#dbe4f0'}`,
+                                                    borderRadius: '6px',
+                                                    padding: '4px 5px',
+                                                    lineHeight: 1.2
+                                                  }}
+                                                >
+                                                  <div style={{ fontSize: '9px', fontWeight: 800, color: '#7c2d12', textTransform: 'uppercase' }}>
+                                                    {assignmentIndex === 0 ? 'Assigned' : 'Reassigned'}
+                                                  </div>
+                                                  <div style={{ fontSize: '10px', fontWeight: 700, color: '#1e3a8a', marginTop: '1px' }}>
+                                                    {getCollectorLabel(item.name)}
+                                                  </div>
+                                                  <div style={{ fontSize: '9px', color: '#6b7280', marginTop: '1px' }}>
+                                                    {formatShortEntryDate(item.date)}
+                                                  </div>
+                                                </div>
+                                              ))}
+                                            </div>
+                                          );
+                                        })()}
+                                      </div>
+                                    </td>
                                     <td style={{ border: '1px solid #000', padding: '3px', textAlign: 'center', lineHeight: '1.2' }}>
                                       {Number(qp.dryMoisture) ? (
                                         <div style={{ color: '#e67e22', fontWeight: 700 }}>{toPercentText(qp.dryMoisture)}</div>
@@ -1302,15 +1384,25 @@ const FinalPassLots: React.FC<FinalPassLotsProps> = ({ entryType, excludeEntryTy
                                               </span>
                                             );
                                           })()
-                                        ) : (
+                                        ) : entry.lotSelectionDecision === 'SOLDOUT' ? (
+                                          <span style={{ fontWeight: 700, color: '#b71c1c' }}>Sold Out</span>
+                                        ) : ['PASS', 'MEDIUM'].includes(String(cp.status || '').toUpperCase()) && !entry.lotSelectionDecision ? (
                                           <span
                                             style={{
-                                              fontWeight: 700,
-                                              color: entry.lotSelectionDecision === 'SOLDOUT' ? '#b71c1c' : '#6b7280'
+                                              display: 'inline-block',
+                                              padding: '2px 8px',
+                                              borderRadius: '10px',
+                                              fontSize: '10px',
+                                              fontWeight: 800,
+                                              background: '#fff3e0',
+                                              color: '#e65100',
+                                              border: '1px solid #ffb74d'
                                             }}
                                           >
-                                            {entry.lotSelectionDecision === 'SOLDOUT' ? 'Sold Out' : '-'}
+                                            Pending Sample Selection
                                           </span>
+                                        ) : (
+                                          <span style={{ fontWeight: 700, color: '#6b7280' }}>-</span>
                                         )
                                       )}
                                     </td>
@@ -1463,8 +1555,8 @@ const FinalPassLots: React.FC<FinalPassLotsProps> = ({ entryType, excludeEntryTy
                       <select value={offerData.baseRateType}
                         onChange={e => setOfferData({ ...offerData, baseRateType: e.target.value })}
                         style={{ ...inputStyle, flex: '0 0 120px', width: '120px', minWidth: '120px', cursor: 'pointer', fontSize: '11px' }} required>
-                        <option value="PD_LOOSE">PD/Loose</option>
                         <option value="PD_WB">PD/WB</option>
+                        <option value="PD_LOOSE">PD/Loose</option>
                         <option value="MD_WB">MD/WB</option>
                         <option value="MD_LOOSE">MD/Loose</option>
                       </select>
@@ -1774,8 +1866,8 @@ const FinalPassLots: React.FC<FinalPassLotsProps> = ({ entryType, excludeEntryTy
                       <select value={finalData.baseRateType}
                         onChange={e => setFinalData({ ...finalData, baseRateType: e.target.value })}
                         style={{ ...inputStyle, flex: '0 0 120px', width: '120px', minWidth: '120px', cursor: 'pointer', fontSize: '11px' }}>
-                        <option value="PD_LOOSE">PD/Loose</option>
                         <option value="PD_WB">PD/WB</option>
+                        <option value="PD_LOOSE">PD/Loose</option>
                         <option value="MD_WB">MD/WB</option>
                         <option value="MD_LOOSE">MD/Loose</option>
                       </select>

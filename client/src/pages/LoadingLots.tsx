@@ -43,6 +43,7 @@ interface SampleEntry {
   entryType?: string;
   lorryNumber?: string;
   sampleCollectedBy?: string;
+  sampleGivenToOffice?: boolean;
   sampleCollectedHistory?: string[];
   qualityReportHistory?: string[];
   qualityAttemptDetails?: QualityAttemptDetail[];
@@ -50,6 +51,7 @@ interface SampleEntry {
   lotSelectionDecision?: string;
   lotSelectionAt?: string;
   finalPrice?: number;
+  creator?: { id: number; username: string; fullName?: string };
 }
 
 interface QualityAttemptDetail {
@@ -170,7 +172,25 @@ const sanitizeAmountInput = (value: string, integerDigits = 5, decimalDigits = 2
   return decimalPart ? `${integerPart}.${decimalPart}` : integerPart;
 };
 const getEntryTypeCode = (entryTypeValue?: string) => entryTypeValue === 'DIRECT_LOADED_VEHICLE' ? 'RL' : entryTypeValue === 'LOCATION_SAMPLE' ? 'LS' : 'MS';
-const paddyColumnWidths = ['48px', '54px', '74px', '66px', '250px', '118px', '124px', '180px', '180px', '120px', '120px', '94px', '74px', '70px', '90px', '64px', '78px', '72px', '72px', '120px', '110px', '150px', '104px'];
+const getEntrySmellLabel = (entry: any) => {
+  const attempts = Array.isArray(entry?.qualityAttemptDetails) ? entry.qualityAttemptDetails : [];
+  for (let idx = attempts.length - 1; idx >= 0; idx -= 1) {
+    const attempt = attempts[idx];
+    if (attempt?.smellHas || (attempt?.smellType && String(attempt.smellType).trim())) {
+      return toTitleCase(attempt.smellType || 'Yes');
+    }
+  }
+
+  const quality = entry?.qualityParameters;
+  if (quality?.smellHas || (quality?.smellType && String(quality.smellType).trim())) {
+    return toTitleCase(quality.smellType || 'Yes');
+  }
+  if (entry?.smellHas || (entry?.smellType && String(entry.smellType).trim())) {
+    return toTitleCase(entry.smellType || 'Yes');
+  }
+  return '-';
+};
+const paddyColumnWidths = ['48px', '54px', '74px', '66px', '250px', '118px', '124px', '180px', '180px', '96px', '120px', '120px', '94px', '74px', '70px', '90px', '64px', '78px', '72px', '72px', '120px', '110px', '150px', '104px'];
 const compactStatusText = (parts: string[]) => parts.filter(Boolean).join(' | ');
 const getAttemptLabel = (attemptNo: number) => {
   if (attemptNo <= 1) return '1st';
@@ -237,7 +257,7 @@ const LoadingLots: React.FC<LoadingLotsProps> = ({ entryType, excludeEntryType }
   const { user } = useAuth();
   const { showNotification } = useNotification();
   const isRiceMode = entryType === 'RICE_SAMPLE';
-  const tableMinWidth = isRiceMode ? '100%' : '2400px';
+  const tableMinWidth = isRiceMode ? '100%' : '2500px';
   const pageSize = 100;
 
   const [entries, setEntries] = useState<SampleEntry[]>([]);
@@ -726,6 +746,12 @@ const LoadingLots: React.FC<LoadingLotsProps> = ({ entryType, excludeEntryType }
     return toTitleCase(raw);
   };
 
+  const getCreatorLabel = (entry: SampleEntry) => {
+    const creator = (entry as any)?.creator;
+    const raw = creator?.fullName || creator?.username || '';
+    return raw ? toTitleCase(raw) : '-';
+  };
+
   const renderCollectedByHistory = (entry: SampleEntry) => {
     const names = (entry.sampleCollectedHistory || []).filter(Boolean).length > 0
       ? (entry.sampleCollectedHistory || []).filter(Boolean)
@@ -739,6 +765,25 @@ const LoadingLots: React.FC<LoadingLotsProps> = ({ entryType, excludeEntryType }
     });
     if (uniqueNames.length === 0) return '-';
     const hasQualityHistory = (entry.qualityAttemptDetails || []).length > 0;
+    
+    // Check if this is a "given to office" scenario (show two-line format)
+    const isGivenToOffice = (entry as any).sampleGivenToOffice;
+    
+    if (isGivenToOffice && uniqueNames.length > 0) {
+      // Two-line format: creator (orange) + collector (black)
+      return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+          <div style={{ fontSize: '11px', fontWeight: '700', color: '#ff9800' }}>
+            {getCreatorLabel(entry)}
+          </div>
+          <div style={{ fontSize: '10px', color: '#000' }}>
+            {getCollectorLabel(uniqueNames[0])}
+          </div>
+        </div>
+      );
+    }
+    
+    // Original multi-line format for non-office samples
     return (
       <div style={{ lineHeight: '1.35' }}>
         {uniqueNames.map((name, index) => (
@@ -876,7 +921,7 @@ const LoadingLots: React.FC<LoadingLotsProps> = ({ entryType, excludeEntryType }
                           )}
                           <thead style={{ position: 'sticky', top: 56, zIndex: 2 }}>
                             <tr style={{ backgroundColor: '#1a237e', color: 'white' }}>
-                              {(isRiceMode ? ['SL', 'Type', 'Bags', 'Pkg', 'Party Name', 'Rice Location', 'Variety', 'Final Rate', 'Sute', 'Mst%', 'Hamali', 'Bkrg', 'LF', 'Status', 'Action'] : ['SL No', 'Type', 'Bags', 'Pkg', 'Party Name', 'Paddy Location', 'Variety', 'Sample Collected By', 'Sample Report By', 'Quality Report', 'Cooking Report', 'Final Rate', 'Sute', 'Moist', 'Brokerage', 'LF', 'Hamali', 'CD', 'EGB', 'Bank Loan', 'Payment', 'Status', 'Action']).map((header) => (
+                              {(isRiceMode ? ['SL', 'Type', 'Bags', 'Pkg', 'Party Name', 'Rice Location', 'Variety', 'Final Rate', 'Sute', 'Mst%', 'Hamali', 'Bkrg', 'LF', 'Status', 'Action'] : ['SL No', 'Type', 'Bags', 'Pkg', 'Party Name', 'Paddy Location', 'Variety', 'Sample Collected By', 'Sample Report By', 'Smell', 'Quality Report', 'Cooking Report', 'Final Rate', 'Sute', 'Moist', 'Brokerage', 'LF', 'Hamali', 'CD', 'EGB', 'Bank Loan', 'Payment', 'Status', 'Action']).map((header) => (
                                 <th
                                   key={header}
                                   style={{
@@ -1046,6 +1091,10 @@ const LoadingLots: React.FC<LoadingLotsProps> = ({ entryType, excludeEntryType }
                               const partyLabel = entry.entryType === 'DIRECT_LOADED_VEHICLE'
                                 ? (lorryText || partyNameText || '-')
                                 : (partyNameText || lorryText || '-');
+                              const showLorrySecondLine = entry.entryType === 'DIRECT_LOADED_VEHICLE'
+                                && !!partyNameText
+                                && !!lorryText
+                                && partyNameText.toUpperCase() !== lorryText;
                               const finalRateValue = o.finalBaseRate ?? o.offerBaseRateValue;
                               const finalRateUnit = unitLabel(o.baseRateUnit || 'per_bag');
                               const cellStyle = (missing: boolean): React.CSSProperties => ({ border: '1px solid #000', padding: '3px 4px', textAlign: 'left', background: missing ? '#fff3cd' : rowBg, color: missing ? '#856404' : '#333', fontWeight: missing ? '700' : '400', fontSize: '12px' });
@@ -1057,7 +1106,25 @@ const LoadingLots: React.FC<LoadingLotsProps> = ({ entryType, excludeEntryType }
                                     <td style={{ border: '1px solid #000', padding: '1px 3px', textAlign: 'center', verticalAlign: 'middle' }}>{entry.entryType === 'DIRECT_LOADED_VEHICLE' ? <span style={{ color: 'white', backgroundColor: '#1565c0', padding: '1px 4px', borderRadius: '3px', fontSize: '10px', fontWeight: 800 }}>RL</span> : entry.entryType === 'LOCATION_SAMPLE' ? <span style={{ color: 'white', backgroundColor: '#e67e22', padding: '1px 4px', borderRadius: '3px', fontSize: '10px', fontWeight: 800 }}>LS</span> : <span style={{ color: '#333', backgroundColor: '#fff', padding: '1px 4px', borderRadius: '3px', fontSize: '10px', fontWeight: 800, border: '1px solid #ccc' }}>MS</span>}</td>
                                     <td style={{ border: '1px solid #000', padding: '3px 4px', textAlign: 'left', fontWeight: 600, fontSize: '14px' }}>{entry.bags?.toLocaleString('en-IN')}</td>
                                     <td style={{ border: '1px solid #000', padding: '3px 4px', textAlign: 'left', fontSize: '14px' }}>{entry.packaging || '-'}</td>
-                                    <td style={{ border: '1px solid #000', padding: '3px 4px', textAlign: 'left', fontSize: '14px' }}><div style={{ fontWeight: 600, color: '#1565c0' }}>{partyLabel}</div></td>
+                                    <td style={{ border: '1px solid #000', padding: '3px 4px', textAlign: 'left', fontSize: '14px' }}>
+                                      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                        <button
+                                          type="button"
+                                          onClick={() => hasQualityReport && handleUpdateClick(entry)}
+                                          style={{ background: 'transparent', border: 'none', color: '#1565c0', textDecoration: hasQualityReport ? 'underline' : 'none', cursor: hasQualityReport ? 'pointer' : 'default', fontWeight: 700, fontSize: '14px', padding: 0, textAlign: 'left' }}
+                                        >
+                                          {partyLabel}
+                                        </button>
+                                        {showLorrySecondLine ? (
+                                          <div style={{ fontSize: '12px', color: '#1565c0', fontWeight: 600 }}>{lorryText}</div>
+                                        ) : null}
+                                        {entry.sampleCollectedBy ? (
+                                          <div style={{ fontSize: '10px', color: '#64748b', fontWeight: 600 }}>
+                                            {getCollectorLabel(entry.sampleCollectedBy)}
+                                          </div>
+                                        ) : null}
+                                      </div>
+                                    </td>
                                     <td style={{ border: '1px solid #000', padding: '3px 4px', textAlign: 'left', fontSize: '14px' }}>{entry.location || '-'}</td>
                                     <td style={{ border: '1px solid #000', padding: '3px 4px', textAlign: 'left', fontSize: '14px' }}>{entry.variety}</td>
                                     <td style={{ border: '1px solid #000', padding: '3px 4px', textAlign: 'left', fontSize: '14px' }}>{finalRateValue ? <div><div style={{ fontWeight: 700, fontSize: '14px', color: '#2c3e50' }}>Rs {finalRateValue}<span style={{ fontSize: '10px', color: '#666' }}>{finalRateUnit}</span></div><div style={{ fontSize: '9px', color: '#888', fontWeight: 500 }}>{o.baseRateType?.replace('_', '/') || ''}</div>{o.egbValue != null && o.egbValue > 0 && <div style={{ fontSize: '9px', color: '#e67e22', fontWeight: 600 }}>EGB: {o.egbValue}</div>}</div> : '-'}</td>
@@ -1078,7 +1145,20 @@ const LoadingLots: React.FC<LoadingLotsProps> = ({ entryType, excludeEntryType }
                                   <td style={{ border: '1px solid #000', padding: '3px 4px', textAlign: 'center' }}><span style={{ display: 'inline-block', minWidth: '28px', padding: '1px 4px', borderRadius: '3px', fontSize: '10px', fontWeight: 800, color: typeCode === 'RL' || typeCode === 'LS' ? '#fff' : '#333', backgroundColor: typeCode === 'RL' ? '#1565c0' : typeCode === 'LS' ? '#e67e22' : '#fff', border: typeCode === 'MS' ? '1px solid #ccc' : 'none' }}>{typeCode}</span></td>
                                   <td style={{ border: '1px solid #000', padding: '3px 4px', textAlign: 'center', fontWeight: 700, fontSize: '13px' }}>{entry.bags?.toLocaleString('en-IN') || '-'}</td>
                                   <td style={{ border: '1px solid #000', padding: '3px 4px', textAlign: 'center', fontSize: '13px' }}>{entry.packaging || '-'}</td>
-                                  <td style={{ border: '1px solid #000', padding: '3px 5px', textAlign: 'left', fontSize: '13px', lineHeight: '1.35', wordBreak: 'break-word' }}><div style={{ fontWeight: 700, color: '#1565c0' }}>{partyLabel}</div></td>
+                                  <td style={{ border: '1px solid #000', padding: '3px 5px', textAlign: 'left', fontSize: '13px', lineHeight: '1.35', wordBreak: 'break-word' }}>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                      <button
+                                        type="button"
+                                        onClick={() => hasQualityReport && handleUpdateClick(entry)}
+                                        style={{ background: 'transparent', border: 'none', color: '#1565c0', textDecoration: hasQualityReport ? 'underline' : 'none', cursor: hasQualityReport ? 'pointer' : 'default', fontWeight: 700, fontSize: '13px', padding: 0, textAlign: 'left' }}
+                                      >
+                                        {partyLabel}
+                                      </button>
+                                      {showLorrySecondLine ? (
+                                        <div style={{ fontSize: '12px', color: '#1565c0', fontWeight: 600 }}>{lorryText}</div>
+                                      ) : null}
+                                    </div>
+                                  </td>
                                   <td style={{ border: '1px solid #000', padding: '3px 5px', textAlign: 'left', fontSize: '13px', wordBreak: 'break-word' }}>{toTitleCase(entry.location) || '-'}</td>
                                   <td style={{ border: '1px solid #000', padding: '3px 5px', textAlign: 'left', fontSize: '13px', wordBreak: 'break-word' }}>{toTitleCase(entry.variety) || '-'}</td>
                                   <td style={{ border: '1px solid #000', padding: '3px 5px', textAlign: 'left', fontSize: '13px', lineHeight: '1.35', wordBreak: 'break-word' }}>{renderCollectedByHistory(entry)}</td>
@@ -1106,6 +1186,9 @@ const LoadingLots: React.FC<LoadingLotsProps> = ({ entryType, excludeEntryType }
                                         })}
                                       </div>
                                     )}
+                                  </td>
+                                  <td style={{ border: '1px solid #000', padding: '3px 5px', textAlign: 'left', fontSize: '12px', lineHeight: '1.2', fontWeight: 700, color: getEntrySmellLabel(entry) === '-' ? '#666' : '#8a4b00', whiteSpace: 'nowrap' }}>
+                                    {getEntrySmellLabel(entry)}
                                   </td>
                                   <td style={{ border: '1px solid #000', padding: '4px 5px', textAlign: 'left', fontSize: '10px', lineHeight: '1.2' }}>
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
@@ -1303,7 +1386,11 @@ const LoadingLots: React.FC<LoadingLotsProps> = ({ entryType, excludeEntryType }
           >
             <div style={{ fontSize: '18px', fontWeight: 800, color: '#1f2937', marginBottom: '8px' }}>Quality Sampling History</div>
             <div style={{ fontSize: '12px', color: '#475569', marginBottom: '12px', lineHeight: '1.5' }}>
-              Party: <b>{toTitleCase(qualityModalEntry.partyName) || '-'}</b> | Variety: <b>{toTitleCase(qualityModalEntry.variety) || '-'}</b> | Location: <b>{toTitleCase(qualityModalEntry.location) || '-'}</b>
+              Party: <b>{toTitleCase(qualityModalEntry.partyName) || '-'}</b> | Variety: <b>{toTitleCase(qualityModalEntry.variety) || '-'}</b> | Location: <b>{toTitleCase(qualityModalEntry.location) || '-'}</b>{(() => {
+                const smellAttempt = [...qualityAttemptDetails].reverse().find((attempt) => attempt.smellHas || (attempt.smellType && String(attempt.smellType).trim()));
+                if (!smellAttempt) return '';
+                return ` | Smell: ${toTitleCase(smellAttempt.smellType || 'Yes')}`;
+              })()}
             </div>
 
             {qualityAttemptDetails.length === 0 ? (
@@ -1396,7 +1483,14 @@ const LoadingLots: React.FC<LoadingLotsProps> = ({ entryType, excludeEntryType }
           <div style={{ backgroundColor: 'white', padding: '14px', borderRadius: '12px', width: '92%', maxWidth: '760px', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
             <h3 style={{ marginTop: 0, color: '#2c3e50', borderBottom: '2px solid #3498db', paddingBottom: '10px', fontSize: '16px', textAlign: 'center' }}>{selectedEntry.brokerName}</h3>
             <div style={{ background: '#f8f9fa', padding: '8px 14px', borderRadius: '6px', marginBottom: '14px', border: '1px solid #e0e0e0', textAlign: 'center', fontSize: '12px', color: '#333' }}>
-              Bags: <b>{selectedEntry.bags}</b> | Pkg: <b>{selectedEntry.packaging || '75'} Kg</b> | Party: <b>{toTitleCase(selectedEntry.partyName) || (selectedEntry.entryType === 'DIRECT_LOADED_VEHICLE' ? selectedEntry.lorryNumber?.toUpperCase() : '')}</b> | Paddy Location: <b>{selectedEntry.location || '-'}</b> | Variety: <b>{selectedEntry.variety}</b>
+              Bags: <b>{selectedEntry.bags}</b> | Pkg: <b>{selectedEntry.packaging || '75'} Kg</b> | Party: <b>{toTitleCase(selectedEntry.partyName) || (selectedEntry.entryType === 'DIRECT_LOADED_VEHICLE' ? selectedEntry.lorryNumber?.toUpperCase() : '')}</b> | Paddy Location: <b>{selectedEntry.location || '-'}</b> | Variety: <b>{selectedEntry.variety}</b> | Collected By: <b>{selectedEntry.sampleCollectedBy ? getCollectorLabel(selectedEntry.sampleCollectedBy) : getCreatorLabel(selectedEntry)}</b>{(() => {
+                const smellAttempts = Array.isArray((selectedEntry as any).qualityAttemptDetails) ? (selectedEntry as any).qualityAttemptDetails : [];
+                const smellAttempt = [...smellAttempts].reverse().find((attempt: any) => attempt?.smellHas || (attempt?.smellType && String(attempt.smellType).trim()));
+                const smellHasValue = smellAttempt?.smellHas ?? (selectedEntry as any).smellHas;
+                const smellTypeValue = smellAttempt?.smellType ?? (selectedEntry as any).smellType;
+                if (!(smellHasValue || (smellTypeValue && String(smellTypeValue).trim()))) return null;
+                return <> | Smell: <b>{toTitleCase(smellTypeValue || 'Yes')}</b></>;
+              })()}
             </div>
             <div style={{ marginBottom: '12px', background: modalMissingFields.length > 0 ? '#fff7db' : '#e8f5e9', border: modalMissingFields.length > 0 ? '1px solid #f3d37b' : '1px solid #c8e6c9', borderRadius: '8px', padding: '9px 10px' }}>
               <div style={{ fontSize: '11px', fontWeight: 800, color: modalMissingFields.length > 0 ? '#8a6400' : '#2e7d32', marginBottom: '4px' }}>
