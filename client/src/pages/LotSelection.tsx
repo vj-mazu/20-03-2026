@@ -428,7 +428,6 @@ const LotSelection: React.FC<LotSelectionProps> = ({ entryType, excludeEntryType
           style={{ padding: '8px 14px', fontSize: '13px', fontWeight: 700, border: 'none', borderRadius: '4px', background: selectionView === 'ALL' ? '#1565c0' : '#90a4ae', color: 'white', cursor: 'pointer' }}
         >
           Pending Sample Selection
-          {renderTabBadge(normalPendingCount, '#0d47a1')}
         </button>
         <button
           type="button"
@@ -598,7 +597,7 @@ const LotSelection: React.FC<LotSelectionProps> = ({ entryType, excludeEntryType
                         </thead>
                         <tbody>
                         {orderedEntries.map((entry, index) => {
-                            const displaySlNo = entry.serialNo || (index + 1);
+                            const displaySlNo = index + 1;
                             const qp = entry.qualityParameters;
                             const smellHas = (qp as any)?.smellHas ?? (entry as any).smellHas;
                             const smellType = (qp as any)?.smellType ?? (entry as any).smellType;
@@ -718,11 +717,9 @@ const LotSelection: React.FC<LotSelectionProps> = ({ entryType, excludeEntryType
                                         <button onClick={() => handleDecision(entry.id, 'PASS_WITH_COOKING')} disabled={isSubmitting} style={{ fontSize: '10px', padding: '4px 6px', backgroundColor: isSubmitting ? '#e0e0e0' : '#28a745', color: isSubmitting ? '#999' : 'white', border: 'none', borderRadius: '4px', cursor: isSubmitting ? 'not-allowed' : 'pointer', fontWeight: '800', boxShadow: '0 1px 2px rgba(0,0,0,0.2)', whiteSpace: 'nowrap' }}>
                                           {isSubmitting ? '...' : <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}><span style={{ fontSize: '12px' }}>🍲</span> Pass for Cook</span>}
                                         </button>
-                                        {!isResampleRow && (
-                                          <button onClick={() => handleDecision(entry.id, 'PASS_WITHOUT_COOKING')} disabled={isSubmitting} style={{ fontSize: '10px', padding: '3px 6px', backgroundColor: isSubmitting ? '#e0e0e0' : '#f39c12', color: isSubmitting ? '#999' : 'white', border: 'none', borderRadius: '4px', cursor: isSubmitting ? 'not-allowed' : 'pointer', fontWeight: '800', boxShadow: '0 1px 2px rgba(0,0,0,0.1)', whiteSpace: 'nowrap' }}>
-                                            {isSubmitting ? '...' : '✅ Pass'}
-                                          </button>
-                                        )}
+                                        <button onClick={() => handleDecision(entry.id, 'PASS_WITHOUT_COOKING')} disabled={isSubmitting} style={{ fontSize: '10px', padding: '3px 6px', backgroundColor: isSubmitting ? '#e0e0e0' : '#f39c12', color: isSubmitting ? '#999' : 'white', border: 'none', borderRadius: '4px', cursor: isSubmitting ? 'not-allowed' : 'pointer', fontWeight: '800', boxShadow: '0 1px 2px rgba(0,0,0,0.1)', whiteSpace: 'nowrap' }}>
+                                          {isSubmitting ? '...' : '✅ Pass'}
+                                        </button>
                                         <button onClick={() => handleDecision(entry.id, 'FAIL')} disabled={isSubmitting} style={{ fontSize: '10px', padding: '3px 6px', backgroundColor: isSubmitting ? '#e0e0e0' : '#d9534f', color: isSubmitting ? '#999' : 'white', border: 'none', borderRadius: '4px', cursor: isSubmitting ? 'not-allowed' : 'pointer', fontWeight: '800', boxShadow: '0 1px 2px rgba(0,0,0,0.1)', whiteSpace: 'nowrap' }}>
                                           {isSubmitting ? '...' : '❌ Fail'}
                                         </button>
@@ -846,9 +843,14 @@ const LotSelection: React.FC<LotSelectionProps> = ({ entryType, excludeEntryType
                                     <td style={{ border: '1px solid #000', padding: '2px 2px', textAlign: 'center', verticalAlign: 'middle' }}>
                                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2px', justifyContent: 'center' }}>
                                         {isResampleRow ? (
-                                          <button onClick={() => handleDecision(entry.id, 'PASS_WITH_COOKING')} disabled={isSubmitting} style={{ fontSize: '10px', padding: '4px 6px', backgroundColor: isSubmitting ? '#e0e0e0' : '#28a745', color: isSubmitting ? '#999' : 'white', border: 'none', borderRadius: '4px', cursor: isSubmitting ? 'not-allowed' : 'pointer', fontWeight: '800', width: '48%', boxShadow: '0 1px 2px rgba(0,0,0,0.2)' }}>
-                                            {isSubmitting ? '...' : '🍲 Pass'}
-                                          </button>
+                                          <>
+                                            <button onClick={() => handleDecision(entry.id, 'PASS_WITH_COOKING')} disabled={isSubmitting} style={{ fontSize: '10px', padding: '4px 6px', backgroundColor: isSubmitting ? '#e0e0e0' : '#28a745', color: isSubmitting ? '#999' : 'white', border: 'none', borderRadius: '4px', cursor: isSubmitting ? 'not-allowed' : 'pointer', fontWeight: '800', width: '31%', boxShadow: '0 1px 2px rgba(0,0,0,0.2)' }}>
+                                              {isSubmitting ? '...' : '🍲 Pass'}
+                                            </button>
+                                            <button onClick={() => handleDecision(entry.id, 'PASS_WITHOUT_COOKING')} disabled={isSubmitting} style={{ fontSize: '10px', padding: '4px 6px', backgroundColor: isSubmitting ? '#e0e0e0' : '#f39c12', color: isSubmitting ? '#999' : 'white', border: 'none', borderRadius: '4px', cursor: isSubmitting ? 'not-allowed' : 'pointer', fontWeight: '800', width: '31%', boxShadow: '0 1px 2px rgba(0,0,0,0.2)' }}>
+                                              {isSubmitting ? '...' : 'Pass'}
+                                            </button>
+                                          </>
                                         ) : (
                                           <button onClick={() => handleDecision(entry.id, 'PASS_WITHOUT_COOKING')} disabled={isSubmitting} style={{ fontSize: '10px', padding: '4px 6px', backgroundColor: isSubmitting ? '#e0e0e0' : '#28a745', color: isSubmitting ? '#999' : 'white', border: 'none', borderRadius: '4px', cursor: isSubmitting ? 'not-allowed' : 'pointer', fontWeight: '800', width: '48%', boxShadow: '0 1px 2px rgba(0,0,0,0.2)' }}>
                                             {isSubmitting ? '...' : 'Pass'}

@@ -254,7 +254,7 @@ const ResampleAllotment: React.FC<ResampleAllotmentProps> = ({ entryType, exclud
                           const assigned = isResampleAssigned(entry);
                           return (
                           <tr key={entry.id}>
-                            <td style={{ border: '1px solid #000', padding: '3px 4px', textAlign: 'center', fontWeight: 700 }}>{entry.serialNo || (index + 1)}</td>
+                            <td style={{ border: '1px solid #000', padding: '3px 4px', textAlign: 'center', fontWeight: 700 }}>{index + 1}</td>
                             <td style={{ border: '1px solid #000', padding: '3px 4px', textAlign: 'center' }}>{getDisplayEntryType(entry)}</td>
                             <td style={{ border: '1px solid #000', padding: '3px 4px', textAlign: 'center' }}>{entry.bags?.toLocaleString('en-IN') || '-'}</td>
                             <td style={{ border: '1px solid #000', padding: '3px 4px', textAlign: 'center' }}>{entry.packaging || '-'}</td>

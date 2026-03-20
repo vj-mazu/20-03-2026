@@ -560,16 +560,14 @@ const CookingReport: React.FC<CookingReportProps> = ({ entryType, excludeEntryTy
           params: {
             status: 'RESAMPLE_COOKING_BOOK',
             page: 1,
-            pageSize: 1,
+            pageSize: 500,
             ...(entryType ? { entryType } : {}),
             ...(excludeEntryType ? { excludeEntryType } : {})
           },
           headers: { Authorization: `Bearer ${token}` }
         });
         const data = response.data as any;
-        setResampleCookingCount(typeof data.total === 'number'
-          ? data.total
-          : (Array.isArray(data.entries) ? data.entries.length : 0));
+        setResampleCookingCount(Array.isArray(data.entries) ? data.entries.length : 0);
       } catch (error) {
         console.error('Error loading resample cooking count:', error);
       }
@@ -665,13 +663,17 @@ const CookingReport: React.FC<CookingReportProps> = ({ entryType, excludeEntryTy
         headers: { Authorization: `Bearer ${token}` }
       });
       const data = response.data as any;
-      setEntries(data.entries || []);
-      if (data.total != null) {
+      const actualEntries = data.entries || [];
+      setEntries(actualEntries);
+      
+      if (status === 'RESAMPLE_COOKING_BOOK') {
+        const trueCount = actualEntries.length;
+        setTotal(trueCount);
+        setTotalPages(Math.ceil(trueCount / PAGE_SIZE) || 1);
+        setResampleCookingCount(trueCount);
+      } else if (data.total != null) {
         setTotal(data.total);
         setTotalPages(data.totalPages || Math.ceil(data.total / PAGE_SIZE));
-        if (status === 'RESAMPLE_COOKING_BOOK') {
-          setResampleCookingCount(data.total);
-        }
       }
     } catch (error: any) {
       showNotification(error.response?.data?.error || 'Failed to load entries', 'error');
@@ -1665,9 +1667,10 @@ const CookingReport: React.FC<CookingReportProps> = ({ entryType, excludeEntryTy
                                       )}
                                       <td style={{ border: '1px solid #000', padding: '3px 4px', textAlign: 'center', fontSize: '13px', fontWeight: '700', color: '#333' }}>
                                         {(() => {
-                                          const raw = entry.qualityParameters?.grainsCountRaw != null ? String(entry.qualityParameters.grainsCountRaw).trim() : '';
+                                          const qp: any = entry.qualityParameters;
+                                          const raw = qp?.grainsCountRaw != null ? String(qp.grainsCountRaw).trim() : '';
                                           if (raw !== '') return `(${raw})`;
-                                          const val = entry.qualityParameters?.grainsCount;
+                                          const val = qp?.grainsCount;
                                           if (val == null || val === '') return '-';
                                           const rawNumeric = String(val).trim();
                                           if (!rawNumeric) return '-';
