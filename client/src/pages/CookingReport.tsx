@@ -2395,77 +2395,99 @@ const CookingReport: React.FC<CookingReportProps> = ({ entryType, excludeEntryTy
                     };
 
                     if (useHorizontalQualityHistory) {
-                      const buildAttemptRows = (qp: any) => {
+                      const thStyle: React.CSSProperties = { padding: '6px 8px', textAlign: 'center', fontSize: '11px', fontWeight: '700', whiteSpace: 'nowrap', borderBottom: '2px solid #e0e0e0', background: '#fff8f0', color: '#9a3412' };
+                      const tdStyle: React.CSSProperties = { padding: '5px 8px', textAlign: 'center', fontSize: '12px', fontWeight: '600', borderBottom: '1px solid #eee', whiteSpace: 'nowrap', color: '#333' };
+                      const tdLabelStyle: React.CSSProperties = { ...tdStyle, textAlign: 'left', fontWeight: '800', color: '#9a3412', background: '#fff8f0', position: 'sticky' as any, left: 0, zIndex: 1 };
+
+                      const getRowData = (qp: any, idx: number) => {
                         const smixOn = isEnabled(qp.smixEnabled, qp.mixSRaw, qp.mixS);
                         const lmixOn = isEnabled(qp.lmixEnabled, qp.mixLRaw, qp.mixL);
                         const paddyOn = isEnabled(qp.paddyWbEnabled, qp.paddyWbRaw, qp.paddyWb);
                         const wbOn = isProvided(qp.wbRRaw, qp.wbR) || isProvided(qp.wbBkRaw, qp.wbBk);
                         const smellHasValue = qp.smellHas ?? (detailEntry as any).smellHas;
                         const smellTypeValue = qp.smellType ?? (detailEntry as any).smellType;
-                        return [
-                          [
-                            { label: 'Sample Collected By', value: toTitleCase(qp.sampleCollectedBy || detailEntry.sampleCollectedBy || '-'), span: 2 },
-                            { label: 'Sample Reported By', value: toTitleCase(qp.reportedBy || '-'), span: 2 },
-                            { label: 'Reported At', value: formatShortDateTime(qp.updatedAt || qp.createdAt || null), span: 2 },
-                            { label: 'Moisture', value: (() => { const val = displayVal(qp.moistureRaw, qp.moisture); return val ? `${val}%` : '-'; })() },
-                            { label: 'Cutting', value: (() => { const cut1 = displayVal(qp.cutting1Raw, qp.cutting1); const cut2 = displayVal(qp.cutting2Raw, qp.cutting2); return cut1 && cut2 ? `${cut1}x${cut2}` : '-'; })() },
-                            { label: 'Bend', value: (() => { const bend1 = displayVal(qp.bend1Raw, qp.bend1); const bend2 = displayVal(qp.bend2Raw, qp.bend2); return bend1 && bend2 ? `${bend1}x${bend2}` : '-'; })() }
-                          ],
-                          [
-                            { label: 'Grains Count', value: (() => { const val = displayVal(qp.grainsCountRaw, qp.grainsCount); return val ? `(${val})` : '-'; })() },
-                            { label: 'Mix', value: displayVal(qp.mixRaw, qp.mix) || '-' },
-                            { label: 'S Mix', value: displayVal(qp.mixSRaw, qp.mixS, smixOn) || '-' },
-                            { label: 'L Mix', value: displayVal(qp.mixLRaw, qp.mixL, lmixOn) || '-' },
-                            { label: 'Kandu', value: displayVal(qp.kanduRaw, qp.kandu) || '-' }
-                          ],
-                          [
-                            { label: 'Oil', value: displayVal(qp.oilRaw, qp.oil) || '-' },
-                            { label: 'SK', value: displayVal(qp.skRaw, qp.sk) || '-' },
-                            { label: 'WB-R', value: displayVal(qp.wbRRaw, qp.wbR, wbOn) || '-' },
-                            { label: 'WB-BK', value: displayVal(qp.wbBkRaw, qp.wbBk, wbOn) || '-' },
-                            { label: 'WB-T', value: displayVal(qp.wbTRaw, qp.wbT, wbOn) || '-' }
-                          ],
-                          [
-                            { label: 'Paddy WB', value: displayVal(qp.paddyWbRaw, qp.paddyWb, paddyOn) || '-', span: 5 }
-                          ].filter((item) => item.value && item.value !== '-'),
-                          [
-                            { label: 'Smell', value: smellHasValue ? toTitleCase(smellTypeValue || 'Yes') : '-' }
-                          ].filter((item) => item.value && item.value !== '-')
-                        ];
+                        return {
+                          label: getAttemptLabel(qp.attemptNo, idx),
+                          reportedBy: toTitleCase(qp.reportedBy || '-'),
+                          reportedAt: formatShortDateTime(qp.updatedAt || qp.createdAt || null) || '-',
+                          moisture: (() => { const val = displayVal(qp.moistureRaw, qp.moisture); return val ? `${val}%` : '-'; })(),
+                          cutting: (() => { const cut1 = displayVal(qp.cutting1Raw, qp.cutting1); const cut2 = displayVal(qp.cutting2Raw, qp.cutting2); return cut1 && cut2 ? `${cut1}x${cut2}` : '-'; })(),
+                          bend: (() => { const bend1 = displayVal(qp.bend1Raw, qp.bend1); const bend2 = displayVal(qp.bend2Raw, qp.bend2); return bend1 && bend2 ? `${bend1}x${bend2}` : '-'; })(),
+                          grainsCount: (() => { const val = displayVal(qp.grainsCountRaw, qp.grainsCount); return val ? `(${val})` : '-'; })(),
+                          mix: displayVal(qp.mixRaw, qp.mix) || '-',
+                          sMix: displayVal(qp.mixSRaw, qp.mixS, smixOn) || '-',
+                          lMix: displayVal(qp.mixLRaw, qp.mixL, lmixOn) || '-',
+                          kandu: displayVal(qp.kanduRaw, qp.kandu) || '-',
+                          oil: displayVal(qp.oilRaw, qp.oil) || '-',
+                          sk: displayVal(qp.skRaw, qp.sk) || '-',
+                          wbR: displayVal(qp.wbRRaw, qp.wbR, wbOn) || '-',
+                          wbBk: displayVal(qp.wbBkRaw, qp.wbBk, wbOn) || '-',
+                          wbT: displayVal(qp.wbTRaw, qp.wbT, wbOn) || '-',
+                          smell: smellHasValue ? toTitleCase(smellTypeValue || 'Yes') : '-',
+                          paddyWb: displayVal(qp.paddyWbRaw, qp.paddyWb, paddyOn) || '-',
+                        };
                       };
+
+                      const rows = qpList.map((qp: any, idx: number) => getRowData(qp, idx));
 
                       return (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                           {qualityPhotoUrl && (
                             <div style={{ background: '#fff', border: '1px solid #e0e0e0', borderRadius: '8px', padding: '10px' }}>
                               <div style={{ fontSize: '11px', fontWeight: '800', color: '#1d4ed8', marginBottom: '8px', textTransform: 'uppercase' }}>Quality Photo</div>
-                              <img
-                                src={resolveMediaUrl(qualityPhotoUrl)}
-                                alt="Quality"
-                                style={{ width: '100%', height: '200px', objectFit: 'cover', borderRadius: '6px', border: '1px solid #e0e0e0' }}
-                              />
+                              <img src={resolveMediaUrl(qualityPhotoUrl)} alt="Quality" style={{ width: '100%', height: '200px', objectFit: 'cover', borderRadius: '6px', border: '1px solid #e0e0e0' }} />
                             </div>
                           )}
-                          {qpList.map((qp: any, idx: number) => (
-                            <div key={`${qp.attemptNo || idx}-cards`} style={{ display: 'grid', gridTemplateColumns: '160px minmax(0, 1fr)', gap: '16px', alignItems: 'start' }}>
-                              <div style={{ background: '#fff7ed', border: '1px solid #fdba74', borderRadius: '10px', minHeight: '62px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px', fontWeight: '900', color: '#9a3412' }}>
-                                {getAttemptLabel(qp.attemptNo, idx)}
-                              </div>
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                                {buildAttemptRows(qp).map((row, rowIdx) => (
-                                  row.length > 0 ? (
-                                    <div key={`${qp.attemptNo || idx}-row-${rowIdx}`} style={{ display: 'grid', gridTemplateColumns: rowIdx === 0 ? 'repeat(9, minmax(0, 1fr))' : `repeat(${row.length}, minmax(0, 1fr))`, gap: '12px' }}>
-                                      {row.map((item, cardIdx) => (
-                                        <div key={`${qp.attemptNo || idx}-${item.label}-${cardIdx}`} style={{ gridColumn: rowIdx === 0 ? `span ${item.span || 1}` : undefined }}>
-                                          <QItem label={item.label} value={item.value} />
-                                        </div>
-                                      ))}
-                                    </div>
-                                  ) : null
+                          <div style={{ overflowX: 'auto', border: '1px solid #e0e0e0', borderRadius: '8px' }}>
+                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', minWidth: '900px' }}>
+                              <thead>
+                                <tr>
+                                  <th style={{ ...thStyle, textAlign: 'left', position: 'sticky' as any, left: 0, zIndex: 2, background: '#fff8f0', minWidth: '100px' }}>Sample</th>
+                                  <th style={thStyle}>Sample Reported By</th>
+                                  <th style={thStyle}>Reported At</th>
+                                  <th style={thStyle}>Moisture</th>
+                                  <th style={thStyle}>Cutting</th>
+                                  <th style={thStyle}>Bend</th>
+                                  <th style={thStyle}>Grains Count</th>
+                                  <th style={thStyle}>Mix</th>
+                                  <th style={thStyle}>S Mix</th>
+                                  <th style={thStyle}>L Mix</th>
+                                  <th style={thStyle}>Kandu</th>
+                                  <th style={thStyle}>Oil</th>
+                                  <th style={thStyle}>SK</th>
+                                  <th style={thStyle}>WB-R</th>
+                                  <th style={thStyle}>WB-BK</th>
+                                  <th style={thStyle}>WB-T</th>
+                                  <th style={thStyle}>Smell</th>
+                                  <th style={thStyle}>Paddy WB</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {rows.map((row, idx) => (
+                                  <tr key={idx} style={{ background: idx % 2 === 0 ? '#fff' : '#fafafa' }}>
+                                    <td style={tdLabelStyle}>{row.label}</td>
+                                    <td style={tdStyle}>{row.reportedBy}</td>
+                                    <td style={{ ...tdStyle, fontSize: '10px' }}>{row.reportedAt}</td>
+                                    <td style={{ ...tdStyle, color: '#e67e22', fontWeight: '800' }}>{row.moisture}</td>
+                                    <td style={tdStyle}>{row.cutting}</td>
+                                    <td style={tdStyle}>{row.bend}</td>
+                                    <td style={{ ...tdStyle, fontWeight: '800' }}>{row.grainsCount}</td>
+                                    <td style={tdStyle}>{row.mix}</td>
+                                    <td style={tdStyle}>{row.sMix}</td>
+                                    <td style={tdStyle}>{row.lMix}</td>
+                                    <td style={tdStyle}>{row.kandu}</td>
+                                    <td style={tdStyle}>{row.oil}</td>
+                                    <td style={tdStyle}>{row.sk}</td>
+                                    <td style={tdStyle}>{row.wbR}</td>
+                                    <td style={tdStyle}>{row.wbBk}</td>
+                                    <td style={tdStyle}>{row.wbT}</td>
+                                    <td style={tdStyle}>{row.smell}</td>
+                                    <td style={tdStyle}>{row.paddyWb}</td>
+                                  </tr>
                                 ))}
-                              </div>
-                            </div>
-                          ))}
+                              </tbody>
+                            </table>
+                          </div>
                         </div>
                       );
                     }
