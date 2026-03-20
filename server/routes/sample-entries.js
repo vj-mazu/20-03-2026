@@ -127,7 +127,7 @@ const hasAlphaOrPositive = (value) => {
   if (!raw) return false;
   if (/[a-zA-Z]/.test(raw)) return true;
   const num = Number(raw);
-  return Number.isFinite(num) && num !== 0;
+  return Number.isFinite(num);
 };
 
 const normalizeGramsReport = (value, fallback = '10gms') => {
@@ -138,7 +138,7 @@ const isProvidedNumericValue = (rawVal, valueVal) => {
   const raw = rawVal !== null && rawVal !== undefined ? String(rawVal).trim() : '';
   if (raw !== '') return true;
   const num = Number(valueVal);
-  return Number.isFinite(num) && num > 0;
+  return Number.isFinite(num);
 };
 const isProvidedAlphaValue = (rawVal, valueVal) => {
   const raw = rawVal !== null && rawVal !== undefined ? String(rawVal).trim() : '';

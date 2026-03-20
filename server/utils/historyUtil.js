@@ -14,7 +14,7 @@ const isProvidedNumeric = (rawVal, valueVal) => {
   const raw = rawVal !== null && rawVal !== undefined ? String(rawVal).trim() : '';
   if (raw !== '') return true;
   const num = Number(valueVal);
-  return Number.isFinite(num) && num > 0;
+  return Number.isFinite(num);
 };
 const isProvidedAlpha = (rawVal, valueVal) => {
   const raw = rawVal !== null && rawVal !== undefined ? String(rawVal).trim() : '';
