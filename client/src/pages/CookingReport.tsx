@@ -1453,7 +1453,7 @@ const CookingReport: React.FC<CookingReportProps> = ({ entryType, excludeEntryTy
                               </thead>
                               <tbody>
                                 {orderedEntries.map((entry, idx) => {
-                                  const slNo = entry.serialNo || (idx + 1);
+                                  const slNo = idx + 1;
 
                                   // Determine Quality Info (Pass)
                                   let objQuality: React.ReactNode = '-';

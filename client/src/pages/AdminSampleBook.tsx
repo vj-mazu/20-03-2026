@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import axios from 'axios';
 
 interface SampleEntry {
@@ -148,13 +148,13 @@ const AdminSampleBook: React.FC = () => {
     }, [entries]);
 
     const statusCounts = {
-        staff: filteredEntries.filter(e => e.workflowStatus === 'STAFF_ENTRY').length,
-        quality: filteredEntries.filter(e => e.qualityParameters?.moisture != null || (e.qualityParameters as any)?.dryMoisture != null).length,
-        cooking: filteredEntries.filter(e => e.cookingReport?.status).length,
-        passed: filteredEntries.filter(e => e.lotSelectionDecision?.includes('PASS')).length,
-        offer: filteredEntries.filter(e => e.offering?.offerRate || e.offering?.offerBaseRateValue).length,
-        final: filteredEntries.filter(e => e.offering?.finalPrice).length,
-        completed: filteredEntries.filter(e => e.workflowStatus === 'COMPLETED').length,
+        staff: filteredEntries.filter((e: any) => e.workflowStatus === 'STAFF_ENTRY').length,
+        quality: filteredEntries.filter((e: any) => e.qualityParameters?.moisture != null || (e.qualityParameters as any)?.dryMoisture != null).length,
+        cooking: filteredEntries.filter((e: any) => e.cookingReport?.status).length,
+        passed: filteredEntries.filter((e: any) => e.lotSelectionDecision?.includes('PASS')).length,
+        offer: filteredEntries.filter((e: any) => e.offering?.offerRate || e.offering?.offerBaseRateValue).length,
+        final: filteredEntries.filter((e: any) => e.offering?.finalPrice).length,
+        completed: filteredEntries.filter((e: any) => e.workflowStatus === 'COMPLETED').length,
     };
 
     return (
@@ -234,7 +234,7 @@ const AdminSampleBook: React.FC = () => {
                             <tr><td colSpan={20} style={{ border: '1px solid #000', textAlign: 'left', padding: '30px', color: '#888' }}>Loading...</td></tr>
                         ) : filteredEntries.length === 0 ? (
                             <tr><td colSpan={16} style={{ border: '1px solid #000', textAlign: 'left', padding: '30px', color: '#888' }}>No entries in sample book</td></tr>
-                        ) : filteredEntries.map((e, i) => {
+                        ) : filteredEntries.map((e: any, i: number) => {
                             const qp = e.qualityParameters;
                             const cr = e.cookingReport;
                             const offer = e.offering;
@@ -253,7 +253,7 @@ const AdminSampleBook: React.FC = () => {
                             const isHardFail = e.workflowStatus === 'FAILED' || (cr && String(cr.status).toUpperCase() === 'FAIL');
                             return (
                                 <tr key={e.id} style={{ background: e.lotSelectionDecision === 'SOLDOUT' ? '#fff0f0' : isHardFail ? '#fff0f0' : isResampleActive ? '#fff3e0' : e.workflowStatus === 'COMPLETED' ? '#f0fff0' : e.entryType === 'DIRECT_LOADED_VEHICLE' ? '#e3f2fd' : e.entryType === 'LOCATION_SAMPLE' ? '#ffe0b2' : '#ffffff', borderLeft: isHardFail ? '4px solid #e74c3c' : isResampleActive ? '4px solid #f59e0b' : e.workflowStatus === 'COMPLETED' ? '4px solid #27ae60' : 'none' }}>
-                                    <td style={{ border: '1px solid #000', padding: '3px 4px', textAlign: 'center', fontWeight: '600', fontSize: '11px', whiteSpace: 'nowrap' }}>{(e as any).serialNo || (i + 1 + (page - 1) * pageSize)}</td>
+                                    <td style={{ border: '1px solid #000', padding: '3px 4px', textAlign: 'center', fontWeight: '600', fontSize: '11px', whiteSpace: 'nowrap' }}>{(i + 1 + (page - 1) * pageSize)}</td>
                                     <td style={{ border: '1px solid #000', padding: '3px 4px', textAlign: 'center', fontWeight: '700', fontSize: '11px', whiteSpace: 'nowrap' }}>{e.bags || '0'}</td>
                                     <td style={{ border: '1px solid #000', padding: '3px 4px', textAlign: 'center', fontSize: '11px', whiteSpace: 'nowrap' }}>{Number(e.packaging) === 0 ? 'Loose' : `${e.packaging || '75'} kg`}</td>
                                     <td style={{ border: '1px solid #000', padding: '2px 4px', textAlign: 'left', fontSize: '9px', whiteSpace: 'nowrap', verticalAlign: 'middle' }}>

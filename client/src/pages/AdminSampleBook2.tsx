@@ -1313,7 +1313,7 @@ const buildQualityStatusRows = (entry: SampleEntry) => {
                                     const partyDisplay = getPartyDisplayParts(entry);
                                     return (
                                         <tr key={`${entry.id}-${requestType}`} style={{ background: index % 2 === 0 ? '#fff7ed' : '#ffffff' }}>
-                                            <td style={{ border: '1px solid #000', padding: '8px 10px', textAlign: 'center', verticalAlign: 'middle', fontWeight: 700 }}>{entry.serialNo || index + 1}</td>
+                                            <td style={{ border: '1px solid #000', padding: '8px 10px', textAlign: 'center', verticalAlign: 'middle', fontWeight: 700 }}>{index + 1}</td>
                                             <td style={{ border: '1px solid #000', padding: '8px 10px', textAlign: 'center', verticalAlign: 'middle', fontWeight: '700' }}>{entry.entryType === 'DIRECT_LOADED_VEHICLE' ? 'RL' : entry.entryType === 'LOCATION_SAMPLE' ? 'LS' : 'MS'}</td>
                                             <td style={{ border: '1px solid #000', padding: '8px 10px', textAlign: 'center', verticalAlign: 'middle' }}>{entry.bags}</td>
                                             <td style={{ border: '1px solid #000', padding: '8px 10px', textAlign: 'center', verticalAlign: 'middle' }}>{entry.packaging}</td>
