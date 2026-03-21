@@ -1,0 +1,46 @@
+{
+  "entries": [
+    {
+      "id": "1bf0bb7a-5044-4eae-a1ed-6d043e7fb6ef",
+      "variety": "sum25 rnr2"
+    },
+    {
+      "id": "cd6fa862-bf5f-4ee2-9a68-ee04231c5466",
+      "variety": "sum25 rnr2"
+    },
+    {
+      "id": "c9a0bbb2-31ff-4696-8ec2-1e975692cf65",
+      "variety": "sum25 rnr2"
+    },
+    {
+      "id": "eea17301-1a62-43f5-96b1-1477a77a3bb2",
+      "variety": "sum25 rnr2"
+    },
+    {
+      "id": "fb5528db-b542-4385-8c24-c50bf7ed2dcb",
+      "variety": "sum25 rnr2"
+    },
+    {
+      "id": "b9956cf1-9ac0-4797-8b07-c4d9e8051aee",
+      "variety": "Sum25 Rnr2"
+    },
+    {
+      "id": "4b9b6c2b-68ce-4285-88e3-7cddf0c3c2d9",
+      "variety": "Dec25 Rnr1"
+    },
+    {
+      "id": "a6f5c487-bc81-48cc-a3f5-6798d4a9bee3",
+      "variety": "sum25 rnr2"
+    }
+  ],
+  "varieties": [
+    {
+      "id": 2,
+      "name": "DEC25 RNR1"
+    },
+    {
+      "id": 1,
+      "name": "DEC 24 RNR"
+    }
+  ]
+}

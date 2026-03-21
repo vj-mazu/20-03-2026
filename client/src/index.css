@@ -1,0 +1,287 @@
+/* ========================================
+   RESPONSIVE DESIGN FOR MILL MANAGEMENT
+   ======================================== */
+
+* {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  font-feature-settings: "kern" 1;
+  font-kerning: normal;
+  font-size: 16px;
+  /* Base font size */
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: "kern" 1;
+  font-kerning: normal;
+  line-height: 1.5;
+  min-height: 100vh;
+  overflow-x: hidden;
+  /* Prevent horizontal scroll */
+}
+
+/* Root container responsive */
+#root {
+  min-height: 100vh;
+  width: 100%;
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+    monospace;
+}
+
+/* Ensure crisp rendering for tables and text */
+table,
+th,
+td,
+p,
+span,
+div,
+input,
+select,
+button {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* Fix rendering — removed global transform/backface-visibility that
+   was causing stacking context and fixed-position issues on mobile */
+
+
+/* CRITICAL: Force Toast Notifications to TOP-RIGHT */
+.custom-toast-container {
+  position: fixed !important;
+  top: 20px !important;
+  right: 20px !important;
+  bottom: auto !important;
+  left: auto !important;
+  z-index: 999999 !important;
+  width: 320px !important;
+}
+
+.Toastify__toast-container,
+div[class*="Toastify__toast-container"] {
+  position: fixed !important;
+  top: 20px !important;
+  right: 20px !important;
+  bottom: auto !important;
+  left: auto !important;
+  z-index: 999999 !important;
+}
+
+.Toastify__toast-container--top-right,
+.Toastify__toast-container--top-left,
+.Toastify__toast-container--top-center,
+.Toastify__toast-container--bottom-right,
+.Toastify__toast-container--bottom-left,
+.Toastify__toast-container--bottom-center {
+  top: 20px !important;
+  right: 20px !important;
+  bottom: auto !important;
+  left: auto !important;
+  transform: none !important;
+}
+
+.custom-toast {
+  border-radius: 8px !important;
+  margin-bottom: 8px !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+}
+
+.custom-toast-body {
+  padding: 12px !important;
+}
+
+/* ========================================
+   RESPONSIVE DESIGN SYSTEM
+   ======================================== */
+
+/* Breakpoints:
+   Mobile: 0-767px
+   Tablet: 768px-1023px  
+   Desktop: 1024px+
+   Large Desktop: 1440px+
+*/
+
+/* ========================================
+   GLOBAL RESPONSIVE FOUNDATION
+   ======================================== */
+
+/* Make ALL container divs scrollable when content overflows */
+div[style*="overflowX"] {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ========================================
+   MOBILE RESPONSIVE (max-width: 767px)
+   ======================================== */
+
+@media screen and (max-width: 767px) {
+
+  /* ---- TABLES: Flexible width with smooth scroll ---- */
+  table {
+    display: table !important;
+    table-layout: auto !important;
+    min-width: 100% !important; /* Start at 100%, let content expand */
+    font-size: 11px !important;
+  }
+
+  /* Make sure table wrappers scroll smoothly and don't break page width */
+  div[style*="overflowX"],
+  div[style*="overflow-x"],
+  div[style*="overflow: auto"] {
+    overflow-x: auto !important;
+    display: block !important;
+    width: 100% !important;
+    max-width: 100vw !important;
+    -webkit-overflow-scrolling: touch !important;
+    scroll-behavior: smooth;
+  }
+
+  th,
+  td {
+    padding: 4px 3px !important;
+    font-size: 11px !important;
+  }
+
+  /* ---- MODALS: Full screen on mobile ---- */
+  div[style*="position: fixed"][style*="display: flex"][style*="justifyContent: center"],
+  div[style*="position: fixed"][style*="display: flex"][style*="justify-content: center"] {
+    padding: 0 !important;
+    align-items: stretch !important;
+  }
+
+  div[style*="position: fixed"]>div[style*="backgroundColor: white"],
+  div[style*="position: fixed"]>div[style*="background-color: white"],
+  div[style*="position: fixed"]>div[style*="background: white"] {
+    width: 100% !important;
+    max-width: 100% !important;
+    max-height: 100vh !important;
+    height: 100vh !important;
+    border-radius: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* ---- TAB BARS: Horizontal scroll ---- */
+  div[style*="display: flex"][style*="gap"] {
+    flex-wrap: nowrap;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* ---- FORMS: Prevent iOS zoom ---- */
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+
+  /* ---- BUTTONS: Proper touch targets ---- */
+  button {
+    min-height: 36px !important;
+  }
+
+  /* ---- FILTER SECTIONS: Stack vertically ---- */
+  div[style*="display: flex"][style*="flexWrap: wrap"],
+  div[style*="display: flex"][style*="flex-wrap: wrap"] {
+    flex-direction: column !important;
+  }
+
+  /* ---- GENERAL LAYOUT ---- */
+  body {
+    padding-bottom: 0 !important;
+    overflow-x: hidden !important;
+  }
+
+  /* ---- PAGE HEADER: Compact on mobile ---- */
+  h1,
+  h2,
+  h3 {
+    font-size: 18px !important;
+  }
+}
+
+/* ========================================
+   TABLET RESPONSIVE (768px - 1023px)
+   ======================================== */
+
+@media screen and (min-width: 768px) and (max-width: 1023px) {
+  table {
+    table-layout: auto !important;
+    font-size: 11px !important;
+  }
+
+  th,
+  td {
+    padding: 5px 4px !important;
+    font-size: 11px !important;
+  }
+}
+
+/* ========================================
+   DESKTOP (1024px+) — No overrides needed
+   ======================================== */
+
+/* ========================================
+   TOUCH DEVICE OPTIMIZATIONS
+   ======================================== */
+
+@media (hover: none) and (pointer: coarse) {
+
+  /* Larger touch targets */
+  button,
+  input[type="submit"],
+  input[type="button"] {
+    min-height: 36px !important;
+  }
+
+  /* Better touch feedback */
+  button:active {
+    opacity: 0.8 !important;
+    transition: opacity 0.1s ease !important;
+  }
+}
+
+/* ========================================
+   PRINT STYLES
+   ======================================== */
+
+@media print {
+
+  .no-print,
+  .hide-print,
+  button,
+  nav,
+  .navigation,
+  .pagination {
+    display: none !important;
+  }
+
+  table {
+    font-size: 10px !important;
+    table-layout: auto !important;
+  }
+
+  th,
+  td {
+    padding: 3px !important;
+  }
+
+  body {
+    font-size: 12px !important;
+  }
+}

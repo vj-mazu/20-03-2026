@@ -1,0 +1,11 @@
+[[services]]
+name = "backend"
+dir = "server"
+command = "npm start"
+port = 5000
+
+[[services]]
+name = "frontend"
+dir = "client"
+build = "npm install && npm run build"
+output = "build"

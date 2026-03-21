@@ -1,0 +1,316 @@
+/* ============================================
+   CUSTOM NOTIFICATION SYSTEM - CLEAN WHITE DESIGN
+   ============================================
+   White background with colored text
+   Fixed position that stays on screen when scrolling
+   ============================================ */
+
+/* ============================================
+   CONTAINER POSITIONING - STAYS FIXED ON SCROLL
+   ============================================ */
+
+/* Main container - FIXED position at top-right, stays when scrolling */
+.Toastify__toast-container {
+  position: fixed !important;
+  top: 20px !important;
+  right: 20px !important;
+  z-index: 99999 !important;
+  width: auto !important;
+  max-width: 420px !important;
+  min-width: 320px !important;
+  padding: 0 !important;
+  box-sizing: border-box !important;
+  pointer-events: none !important;
+}
+
+.Toastify__toast-container * {
+  pointer-events: auto !important;
+}
+
+/* Top-right position modifier - Ensure it stays top-right */
+.Toastify__toast-container--top-right {
+  position: fixed !important;
+  top: 20px !important;
+  right: 20px !important;
+  left: auto !important;
+  bottom: auto !important;
+}
+
+/* ============================================
+   TOAST BOX STYLING - CLEAN WHITE BACKGROUND
+   ============================================ */
+
+.Toastify__toast {
+  position: relative !important;
+  min-height: 60px !important;
+  max-height: 400px !important;
+  border-radius: 8px !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+  padding: 0 !important;
+  margin-bottom: 12px !important;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif !important;
+  font-size: 14px !important;
+  line-height: 1.5 !important;
+  word-wrap: break-word !important;
+  overflow-wrap: break-word !important;
+  cursor: pointer !important;
+  overflow: visible !important;
+  background: white !important;
+  border: 1px solid #e5e7eb !important;
+}
+
+/* ============================================
+   TYPE-SPECIFIC COLORS - WHITE BACKGROUND WITH COLORED TEXT
+   ============================================ */
+
+/* Success - White background with GREEN text */
+.Toastify__toast--success {
+  background: white !important;
+  border-left: 4px solid #10b981 !important;
+  border-top: 1px solid #e5e7eb !important;
+  border-right: 1px solid #e5e7eb !important;
+  border-bottom: 1px solid #e5e7eb !important;
+}
+
+/* Error - White background with RED text */
+.Toastify__toast--error {
+  background: white !important;
+  border-left: 4px solid #ef4444 !important;
+  border-top: 1px solid #e5e7eb !important;
+  border-right: 1px solid #e5e7eb !important;
+  border-bottom: 1px solid #e5e7eb !important;
+}
+
+/* Warning - White background with ORANGE text */
+.Toastify__toast--warning {
+  background: white !important;
+  border-left: 4px solid #f59e0b !important;
+  border-top: 1px solid #e5e7eb !important;
+  border-right: 1px solid #e5e7eb !important;
+  border-bottom: 1px solid #e5e7eb !important;
+}
+
+/* Info - White background with BLUE text */
+.Toastify__toast--info {
+  background: white !important;
+  border-left: 4px solid #3b82f6 !important;
+  border-top: 1px solid #e5e7eb !important;
+  border-right: 1px solid #e5e7eb !important;
+  border-bottom: 1px solid #e5e7eb !important;
+}
+
+/* ============================================
+   TEXT CONTENT STYLING - COLORED TEXT ON WHITE
+   ============================================ */
+
+.Toastify__toast-body {
+  padding: 16px 20px !important;
+  margin: 0 !important;
+  font-weight: 500 !important;
+  white-space: pre-wrap !important;
+  word-break: break-word !important;
+  line-height: 1.5 !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+}
+
+/* Success text - GREEN */
+.Toastify__toast--success .Toastify__toast-body {
+  color: #10b981 !important;
+}
+
+/* Error text - RED */
+.Toastify__toast--error .Toastify__toast-body {
+  color: #ef4444 !important;
+}
+
+/* Warning text - ORANGE */
+.Toastify__toast--warning .Toastify__toast-body {
+  color: #f59e0b !important;
+}
+
+/* Info text - BLUE */
+.Toastify__toast--info .Toastify__toast-body {
+  color: #3b82f6 !important;
+}
+
+/* Icon styling */
+.Toastify__toast-icon {
+  width: 24px !important;
+  height: 24px !important;
+  margin-right: 0 !important;
+  flex-shrink: 0 !important;
+}
+
+/* Icon colors */
+.Toastify__toast--success .Toastify__toast-icon svg {
+  fill: #10b981 !important;
+}
+
+.Toastify__toast--error .Toastify__toast-icon svg {
+  fill: #ef4444 !important;
+}
+
+.Toastify__toast--warning .Toastify__toast-icon svg {
+  fill: #f59e0b !important;
+}
+
+.Toastify__toast--info .Toastify__toast-icon svg {
+  fill: #3b82f6 !important;
+}
+
+/* ============================================
+   PROGRESS BAR STYLING - COLORED BARS
+   ============================================ */
+
+.Toastify__progress-bar {
+  height: 3px !important;
+  border-radius: 0 0 8px 8px !important;
+  opacity: 0.3 !important;
+}
+
+.Toastify__progress-bar--success {
+  background: #10b981 !important;
+}
+
+.Toastify__progress-bar--error {
+  background: #ef4444 !important;
+}
+
+.Toastify__progress-bar--warning {
+  background: #f59e0b !important;
+}
+
+.Toastify__progress-bar--info {
+  background: #3b82f6 !important;
+}
+
+/* ============================================
+   CLOSE BUTTON STYLING - GRAY COLOR
+   ============================================ */
+
+.Toastify__close-button {
+  color: #6b7280 !important;
+  opacity: 0.6 !important;
+  align-self: flex-start !important;
+  padding: 4px !important;
+  margin: 12px 12px 0 0 !important;
+  background: transparent !important;
+  border: none !important;
+  cursor: pointer !important;
+  font-size: 18px !important;
+  line-height: 1 !important;
+  position: absolute !important;
+  right: 0 !important;
+  top: 0 !important;
+}
+
+.Toastify__close-button:hover {
+  opacity: 1 !important;
+  background: #f3f4f6 !important;
+  border-radius: 4px !important;
+}
+
+.Toastify__close-button > svg {
+  height: 14px !important;
+  width: 14px !important;
+  fill: #6b7280 !important;
+}
+
+/* ============================================
+   RESPONSIVE DESIGN
+   ============================================ */
+
+/* Tablet and below */
+@media (max-width: 768px) {
+  .Toastify__toast-container {
+    width: calc(100vw - 40px) !important;
+    max-width: 380px !important;
+    min-width: 280px !important;
+    right: 20px !important;
+    left: auto !important;
+    top: 20px !important;
+  }
+
+  .Toastify__toast-container--top-right {
+    right: 20px !important;
+    left: auto !important;
+    top: 20px !important;
+  }
+
+  .Toastify__toast {
+    font-size: 14px !important;
+    padding: 14px !important;
+    min-height: 60px !important;
+  }
+}
+
+/* Mobile */
+@media (max-width: 480px) {
+  .Toastify__toast-container {
+    width: calc(100vw - 32px) !important;
+    right: 16px !important;
+    top: 16px !important;
+    min-width: 280px !important;
+  }
+
+  .Toastify__toast-container--top-right {
+    right: 16px !important;
+    top: 16px !important;
+  }
+
+  .Toastify__toast {
+    font-size: 13px !important;
+    padding: 12px !important;
+  }
+}
+
+/* ============================================
+   ANIMATIONS AND TRANSITIONS
+   ============================================ */
+
+/* Slide in from right animation */
+@keyframes slideInRight {
+  from {
+    transform: translateX(110%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+/* Fade out animation */
+@keyframes fadeOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+/* Entrance animation */
+.Toastify__toast--top-right {
+  animation: slideInRight 0.3s ease-out !important;
+}
+
+/* Exit animation */
+.Toastify__toast--closing {
+  animation: fadeOut 0.3s ease-in !important;
+}
+
+/* Smooth transitions for all interactive elements */
+.Toastify__toast {
+  transition: all 0.3s ease !important;
+}
+
+.Toastify__close-button {
+  transition: opacity 0.2s ease, background 0.2s ease !important;
+}
+
+.Toastify__progress-bar {
+  transition: width 0.1s linear !important;
+}

@@ -1,0 +1,7 @@
+Token: manjunath role:staff type:location
+API returned 5 entries!
+1. c=Manjunath o=false s=STAFF_ENTRY
+2. c=Manjunath o=false s=STAFF_ENTRY
+3. c=Manjunath o=false s=STAFF_ENTRY
+4. c=Manjunath o=false s=STAFF_ENTRY
+5. c=Manjunath o=false s=STAFF_ENTRY

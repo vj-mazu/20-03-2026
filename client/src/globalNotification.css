@@ -1,0 +1,36 @@
+/* ============================================
+   GLOBAL NOTIFICATION STYLES
+   Ensures notifications stay fixed at top-right
+   ============================================ */
+
+/* Ensure body doesn't have overflow issues */
+body {
+  position: relative;
+}
+
+/* Ensure App container doesn't interfere with fixed positioning */
+#root,
+.App {
+  position: relative;
+}
+
+/* Force all notification-related elements to use correct positioning */
+div[class*="NotificationContainer"] {
+  position: fixed !important;
+  top: 20px !important;
+  right: 20px !important;
+  z-index: 999999 !important;
+}
+
+/* Ensure notification cards are clickable */
+div[class*="NotificationCard"] {
+  pointer-events: auto !important;
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+  div[class*="NotificationContainer"] {
+    top: 16px !important;
+    right: 16px !important;
+  }
+}

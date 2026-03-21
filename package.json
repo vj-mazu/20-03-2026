@@ -1,0 +1,45 @@
+{
+  "name": "mother-india-stock-management",
+  "version": "1.0.0",
+  "description": "Complete stock management system for industrial mill",
+  "scripts": {
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "server": "cd server && npm run dev",
+    "client": "cd client && npm start",
+    "build": "cd client && npm run build",
+    "seed:render": "npm run seed:render --prefix server",
+    "start": "npm start --prefix server",
+    "install-deps": "npm install && cd server && npm install && cd ../client && npm install"
+  },
+  "keywords": [
+    "stock-management",
+    "industrial",
+    "mill",
+    "inventory"
+  ],
+  "author": "Mother India Mill",
+  "license": "MIT",
+  "devDependencies": {
+    "@playwright/test": "^1.58.2",
+    "@types/node": "^25.4.0",
+    "concurrently": "^8.2.2"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "bcrypt": "^5.1.1",
+    "date-fns": "^2.30.0",
+    "lodash": "^4.17.21",
+    "rxjs": "^7.8.2",
+    "sharp": "^0.33.5",
+    "yargs": "^17.7.2"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vj-mazu/rice_mill_complete_software.git"
+  },
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/vj-mazu/rice_mill_complete_software/issues"
+  },
+  "homepage": "https://github.com/vj-mazu/rice_mill_complete_software#readme"
+}

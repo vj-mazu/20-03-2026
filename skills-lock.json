@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "skills": {
+    "clean-code": {
+      "source": "vudovn/antigravity-kit",
+      "sourceType": "github",
+      "computedHash": "92c7632cf9f11eaee3b91f0fd2880f3f06db7003f209ffeb6d39d9c949546e90"
+    }
+  }
+}

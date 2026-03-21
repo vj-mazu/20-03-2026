@@ -1,0 +1,25 @@
+{
+  "entries": [
+    {
+      "variety": "sum25 rnr2",
+      "count": "6"
+    },
+    {
+      "variety": "Dec25 Rnr1",
+      "count": "1"
+    },
+    {
+      "variety": "Sum25 Rnr2",
+      "count": "1"
+    }
+  ],
+  "varieties": [
+    {
+      "name": "DEC25 RNR1"
+    },
+    {
+      "name": "DEC 24 RNR"
+    }
+  ],
+  "rice": []
+}
