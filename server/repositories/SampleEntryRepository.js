@@ -246,7 +246,7 @@ class SampleEntryRepository {
             { lotSelectionDecision: 'FAIL' }
           ]
         },
-        { workflowStatus: { [Op.ne]: 'FAILED' } }, // Exclude permanently failed
+        { workflowStatus: { [Op.notIn]: ['FAILED', 'CANCELLED'] } }, // Exclude permanently failed or cancelled
         {
           [Op.or]: [
             { entryType: { [Op.ne]: 'LOCATION_SAMPLE' } },
@@ -263,7 +263,7 @@ class SampleEntryRepository {
             { lotSelectionDecision: 'FAIL' }
           ]
         },
-        { workflowStatus: { [Op.ne]: 'FAILED' } },
+        { workflowStatus: { [Op.notIn]: ['FAILED', 'CANCELLED'] } },
         {
           [Op.or]: [
             { lotSelectionDecision: 'FAIL' },

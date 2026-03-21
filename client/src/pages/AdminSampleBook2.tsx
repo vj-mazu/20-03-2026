@@ -742,11 +742,19 @@ const buildQualityStatusRows = (entry: SampleEntry) => {
                 status = 'Pass';
             }
 
+            if (entry.workflowStatus === 'CANCELLED' && status === 'Pending') {
+                status = '';
+            }
+
             return {
                 type: getQualityTypeLabel(attempt),
                 status
             };
         });
+
+        if (entry.workflowStatus === 'CANCELLED') {
+            return rows;
+        }
 
         if (rows.length === 0) {
             if (isFailDecision) {
@@ -838,6 +846,10 @@ const buildQualityStatusRows = (entry: SampleEntry) => {
             });
         }
 
+        if (entry.workflowStatus === 'CANCELLED') {
+            return rows;
+        }
+
         if (pendingDone) {
             rows.push({
                 status: 'Pending',
@@ -913,6 +925,7 @@ const buildQualityStatusRows = (entry: SampleEntry) => {
         const rows = buildQualityStatusRows(entry);
 
         if (rows.length === 0) {
+            if (entry.workflowStatus === 'CANCELLED') return <span style={{ color: '#999', fontSize: '10px' }}>-</span>;
             return <div style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center' }}><span style={{ background: '#f5f5f5', color: '#c62828', padding: '2px 6px', borderRadius: '10px', fontSize: '9px' }}>Pending</span></div>;
         }
 
@@ -920,14 +933,16 @@ const buildQualityStatusRows = (entry: SampleEntry) => {
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '4px' }}>
                 {rows.map((row, idx) => {
                     const typeStyle = getQualityTypeStyle(row.type);
-                    const statusStyle = getStatusStyle(row.status);
+                    const statusStyle = row.status ? getStatusStyle(row.status) : { bg: 'transparent', color: 'transparent' };
                     return (
                         <div key={`${entry.id}-quality-row-${idx}`} style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
                             <span style={{ fontSize: '9px', fontWeight: '800', color: '#334155' }}>
                                 {getSamplingLabel(idx + 1)}
                             </span>
                             <span style={{ background: typeStyle.bg, color: typeStyle.color, padding: '2px 6px', borderRadius: '10px', fontSize: '9px', fontWeight: '700' }}>{row.type}</span>
-                            <span style={{ background: statusStyle.bg, color: statusStyle.color, padding: '2px 6px', borderRadius: '10px', fontSize: '9px', fontWeight: '700' }}>{row.status}</span>
+                            {row.status ? (
+                                <span style={{ background: statusStyle.bg, color: statusStyle.color, padding: '2px 6px', borderRadius: '10px', fontSize: '9px', fontWeight: '700' }}>{row.status}</span>
+                            ) : null}
                         </div>
                     );
                 })}
@@ -994,9 +1009,7 @@ const buildQualityStatusRows = (entry: SampleEntry) => {
         );
         const statusRows: Array<{ label: string; bg: string; color: string }> = [];
 
-        if (entry.workflowStatus === 'CANCELLED') {
-            statusRows.push({ label: 'Cancelled', bg: '#f8bbd0', color: '#880e4f' });
-        } else if (entry.lotSelectionDecision === 'SOLDOUT' || (entry.workflowStatus === 'COMPLETED' && (entry.offering?.finalPrice || entry.offering?.finalBaseRate))) {
+        if (entry.lotSelectionDecision === 'SOLDOUT' || (entry.workflowStatus === 'COMPLETED' && (entry.offering?.finalPrice || entry.offering?.finalBaseRate))) {
             statusRows.push({ label: 'Sold Out', bg: '#800000', color: '#ffffff' });
         } else if (entry.workflowStatus === 'FAILED' || latestCooking?.status === 'Fail' || latestQuality?.status === 'Fail') {
             statusRows.push({ label: 'Fail', bg: '#ffcdd2', color: '#b71c1c' });
@@ -1013,6 +1026,38 @@ const buildQualityStatusRows = (entry: SampleEntry) => {
             statusRows.push({ label: 'Pending', bg: '#fff8e1', color: '#f57f17' });
         } else {
             statusRows.push(getWorkflowStatusMeta(entry.workflowStatus));
+        }
+
+        if (entry.workflowStatus === 'CANCELLED') {
+            return (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', width: '100%' }}>
+                    <button
+                        type="button"
+                        onClick={(e) => { 
+                            e.stopPropagation(); 
+                            if (entry.cancelRemarks) {
+                                setRemarksPopup({ isOpen: true, text: `Cancellation Remarks:\n\n${entry.cancelRemarks}` });
+                            }
+                        }}
+                        style={{
+                            fontSize: '9px',
+                            padding: '3px 8px',
+                            borderRadius: '10px',
+                            backgroundColor: '#f8bbd0',
+                            color: '#880e4f',
+                            fontWeight: '800',
+                            lineHeight: '1.2',
+                            whiteSpace: 'normal',
+                            textAlign: 'center',
+                            border: '1px solid #d81b60',
+                            cursor: entry.cancelRemarks ? 'pointer' : 'default',
+                            boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                        }}
+                    >
+                        Cancelled
+                    </button>
+                </div>
+            );
         }
 
         return (
@@ -1035,16 +1080,6 @@ const buildQualityStatusRows = (entry: SampleEntry) => {
                         {row.label}
                     </span>
                 ))}
-                {entry.workflowStatus === 'CANCELLED' && entry.cancelRemarks && (
-                    <button
-                        type="button"
-                        onClick={(e) => { e.stopPropagation(); setRemarksPopup({ isOpen: true, text: `Cancellation Remarks: ${entry.cancelRemarks}` }); }}
-                        style={{ color: '#880e4f', fontSize: '9px', fontWeight: '700', cursor: 'pointer', background: 'transparent', border: '1px solid #880e4f', borderRadius: '4px', padding: '1px 4px', marginTop: '2px' }}
-                        title="View Remarks"
-                    >
-                        🔍 Remarks
-                    </button>
-                )}
             </div>
         );
     };

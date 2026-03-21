@@ -1567,20 +1567,28 @@ const FinalPassLots: React.FC<FinalPassLotsProps> = ({ entryType, excludeEntryTy
                                             const hasFinalAlready = Boolean(entry.finalPrice || o?.finalPrice || o?.finalBaseRate);
                                             const resampleReadyForLoading = hasFinalAlready && resampleCookingDone;
                                             return (
-                                              <span
-                                                style={{
-                                                  display: 'inline-block',
-                                                  padding: '2px 8px',
-                                                  borderRadius: '10px',
-                                                  fontSize: '10px',
-                                                  fontWeight: 800,
-                                                  background: resampleReadyForLoading ? '#e8f5e9' : '#fff3cd',
-                                                  color: resampleReadyForLoading ? '#2e7d32' : '#8a6400',
-                                                  border: resampleReadyForLoading ? '1px solid #c8e6c9' : '1px solid #f4d06f'
-                                                }}
-                                              >
-                                                {resampleReadyForLoading ? 'Ready for Loading' : 'Resample'}
-                                              </span>
+                                              <div style={{ display: 'flex', gap: '4px', justifyContent: 'center', alignItems: 'center', flexWrap: 'wrap' }}>
+                                                <span
+                                                  style={{
+                                                    display: 'inline-block',
+                                                    padding: '2px 8px',
+                                                    borderRadius: '10px',
+                                                    fontSize: '10px',
+                                                    fontWeight: 800,
+                                                    background: resampleReadyForLoading ? '#e8f5e9' : '#fff3cd',
+                                                    color: resampleReadyForLoading ? '#2e7d32' : '#8a6400',
+                                                    border: resampleReadyForLoading ? '1px solid #c8e6c9' : '1px solid #f4d06f'
+                                                  }}
+                                                >
+                                                  {resampleReadyForLoading ? 'Ready for Loading' : 'Resample'}
+                                                </span>
+                                                <button
+                                                  onClick={() => setCancelModal({ isOpen: true, entryId: entry.id, remarks: '' })}
+                                                  style={{ fontSize: '10px', padding: '3px 7px', backgroundColor: '#e91e63', color: '#fff', border: 'none', borderRadius: '3px', cursor: 'pointer', fontWeight: '700' }}
+                                                >
+                                                  Cancel
+                                                </button>
+                                              </div>
                                             );
                                           })()
                                         ) : entry.lotSelectionDecision === 'SOLDOUT' ? (
