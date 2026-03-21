@@ -2024,7 +2024,7 @@ router.put('/:id/physical-inspection/:inspectionId', authenticateToken, async (r
 
 router.post('/:id/lot-selection', authenticateToken, async (req, res) => {
   try {
-    let { decision } = req.body; // 'PASS_WITHOUT_COOKING', 'PASS_WITH_COOKING', 'FAIL'
+    let { decision, remarks } = req.body; // 'PASS_WITHOUT_COOKING', 'PASS_WITH_COOKING', 'FAIL'
     const entry = await SampleEntry.findByPk(req.params.id, {
       attributes: ['id', 'entryType', 'workflowStatus', 'lotSelectionDecision']
     });
@@ -2076,6 +2076,7 @@ router.post('/:id/lot-selection', authenticateToken, async (req, res) => {
         lotSelectionDecision: decision === 'RESAMPLE' ? 'FAIL' : decision,
         lotSelectionByUserId: req.user.userId,
         lotSelectionAt: new Date(),
+        failRemarks: (decision === 'FAIL' || decision === 'RESAMPLE') && req.body.remarks ? req.body.remarks : null,
         ...resampleUpdates
       },
       req.user.userId

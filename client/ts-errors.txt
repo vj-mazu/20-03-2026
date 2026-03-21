@@ -1,0 +1,88 @@
+src/__tests__/bug1-party-name-popup.test.tsx(51,40): error TS2345: Argument of type '(url: string) => Promise<{ data: { users: { id: number; username: string; fullName: string; }[]; }; }> | Promise<{ data: { entries: { id: string; serialNo: number; entryDate: string; createdAt: string; brokerName: string; ... 9 more ...; qualityParameters: { ...; }; }[]; total: number; totalPages: number; }; }> | Pr...' is not assignable to parameter of type '(url: string, config?: AxiosXHRConfigBase<unknown> | undefined) => IPromise<AxiosXHR<unknown>>'.
+  Type 'Promise<{ data: { users: { id: number; username: string; fullName: string; }[]; }; }> | Promise<{ data: { entries: { id: string; serialNo: number; entryDate: string; createdAt: string; brokerName: string; ... 9 more ...; qualityParameters: { ...; }; }[]; total: number; totalPages: number; }; }> | Promise<...> | Prom...' is not assignable to type 'IPromise<AxiosXHR<unknown>>'.
+    Type 'Promise<{ data: { users: { id: number; username: string; fullName: string; }[]; }; }>' is not assignable to type 'IPromise<AxiosXHR<unknown>>'.
+      Types of property 'then' are incompatible.
+        Type '<TResult1 = { data: { users: { id: number; username: string; fullName: string; }[]; }; }, TResult2 = never>(onfulfilled?: ((value: { data: { users: { id: number; username: string; fullName: string; }[]; }; }) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLi...' is not assignable to type '{ <U>(onFulfilled?: ((value: AxiosXHR<unknown>) => U | IThenable<U>) | undefined, onRejected?: ((error: any) => U | IThenable<U>) | undefined): IPromise<...>; <U>(onFulfilled?: ((value: AxiosXHR<...>) => U | IThenable<...>) | undefined, onRejected?: ((error: any) => void) | undefined): IPromise<...>; }'.
+          Types of parameters 'onfulfilled' and 'onFulfilled' are incompatible.
+            Type '((value: AxiosXHR<unknown>) => any) | undefined' is not assignable to type '((value: { data: { users: { id: number; username: string; fullName: string; }[]; }; }) => any) | null | undefined'.
+              Type '(value: AxiosXHR<unknown>) => any' is not assignable to type '(value: { data: { users: { id: number; username: string; fullName: string; }[]; }; }) => any'.
+                Types of parameters 'value' and 'value' are incompatible.
+                  Type '{ data: { users: { id: number; username: string; fullName: string; }[]; }; }' is missing the following properties from type 'AxiosXHR<unknown>': status, statusText, headers, config
+src/__tests__/bug1-party-name-popup.test.tsx(168,40): error TS2345: Argument of type '(url: string) => Promise<Axios.AxiosXHR<unknown>> | Promise<{ data: { users: { id: number; username: string; fullName: string; }[]; }; }> | Promise<{ data: { entries: { id: string; serialNo: number; ... 13 more ...; qualityParameters: { ...; }; }[]; total: number; totalPages: number; }; }> | Promise<...>' is not assignable to parameter of type '(url: string, config?: AxiosXHRConfigBase<unknown> | undefined) => IPromise<AxiosXHR<unknown>>'.
+  Type 'Promise<AxiosXHR<unknown>> | Promise<{ data: { users: { id: number; username: string; fullName: string; }[]; }; }> | Promise<{ data: { entries: { id: string; serialNo: number; entryDate: string; ... 12 more ...; qualityParameters: { ...; }; }[]; total: number; totalPages: number; }; }> | Promise<...>' is not assignable to type 'IPromise<AxiosXHR<unknown>>'.
+    Type 'Promise<AxiosXHR<unknown>>' is not assignable to type 'IPromise<AxiosXHR<unknown>>'.
+      The types of 'catch(...).then' are incompatible between these types.
+        Type '<TResult1 = AxiosXHR<unknown> | U, TResult2 = never>(onfulfilled?: ((value: AxiosXHR<unknown> | U) => TResult1 | PromiseLike<TResult1>) | null | undefined, onrejected?: ((reason: any) => TResult2 | PromiseLike<...>) | ... 1 more ... | undefined) => Promise<...>' is not assignable to type '{ <U>(onFulfilled?: ((value: U) => U | IThenable<U>) | undefined, onRejected?: ((error: any) => U | IThenable<U>) | undefined): IPromise<U>; <U>(onFulfilled?: ((value: U) => U | IThenable<...>) | undefined, onRejected?: ((error: any) => void) | undefined): IPromise<...>; }'.
+          Types of parameters 'onfulfilled' and 'onFulfilled' are incompatible.
+            Type '((value: U) => any) | undefined' is not assignable to type '((value: AxiosXHR<unknown> | U) => any) | null | undefined'.
+              Type '(value: U) => any' is not assignable to type '(value: AxiosXHR<unknown> | U) => any'.
+                Types of parameters 'value' and 'value' are incompatible.
+                  Type 'AxiosXHR<unknown> | U' is not assignable to type 'U'.
+                    'U' could be instantiated with an arbitrary type which could be unrelated to 'AxiosXHR<unknown> | U'.
+src/__tests__/bug1-party-name-popup.test.tsx(280,40): error TS2345: Argument of type '(url: string) => Promise<Axios.AxiosXHR<unknown>> | Promise<{ data: { users: { id: number; username: string; fullName: string; }[]; }; }> | Promise<{ data: { entries: { id: string; serialNo: number; ... 11 more ...; qualityParameters: { ...; }; }[]; total: number; totalPages: number; }; }> | Promise<...>' is not assignable to parameter of type '(url: string, config?: AxiosXHRConfigBase<unknown> | undefined) => IPromise<AxiosXHR<unknown>>'.
+  Type 'Promise<AxiosXHR<unknown>> | Promise<{ data: { users: { id: number; username: string; fullName: string; }[]; }; }> | Promise<{ data: { entries: { id: string; serialNo: number; entryDate: string; ... 10 more ...; qualityParameters: { ...; }; }[]; total: number; totalPages: number; }; }> | Promise<...>' is not assignable to type 'IPromise<AxiosXHR<unknown>>'.
+    Type 'Promise<AxiosXHR<unknown>>' is not assignable to type 'IPromise<AxiosXHR<unknown>>'.
+src/__tests__/paddy-sample-display-fixes.test.tsx(10,38): error TS2307: Cannot find module 'vitest' or its corresponding type declarations.
+src/components/SampleEntryDetailModal.tsx(332,42): error TS7031: Binding element 'detailEntry' implicitly has an 'any' type.
+src/components/SampleEntryDetailModal.tsx(332,55): error TS7031: Binding element 'detailMode' implicitly has an 'any' type.
+src/components/SampleEntryDetailModal.tsx(332,67): error TS7031: Binding element 'onClose' implicitly has an 'any' type.
+src/components/SampleEntryDetailModal.tsx(345,61): error TS18046: 'data' is of type 'unknown'.
+src/components/SampleEntryDetailModal.tsx(346,45): error TS7006: Parameter 'u' implicitly has an 'any' type.
+src/components/SampleEntryDetailModal.tsx(355,29): error TS7006: Parameter 'val' implicitly has an 'any' type.
+src/components/SampleEntryDetailModal.tsx(370,60): error TS2339: Property 'username' does not exist on type 'never'.
+src/components/SampleEntryDetailModal.tsx(371,20): error TS2339: Property 'fullName' does not exist on type 'never'.
+src/components/SampleEntryDetailModal.tsx(371,55): error TS2339: Property 'fullName' does not exist on type 'never'.
+src/components/SampleEntryDetailModal.tsx(714,9): error TS2552: Cannot find name 'setDetailMode'. Did you mean 'detailMode'?
+src/components/SampleEntryDetailModal.tsx(799,68): error TS7006: Parameter 'ov' implicitly has an 'any' type.
+src/components/SampleEntryDetailModal.tsx(799,72): error TS7006: Parameter 'i' implicitly has an 'any' type.
+src/components/SampleEntryDetailModal.tsx(1281,68): error TS7006: Parameter 'ov' implicitly has an 'any' type.
+src/components/SampleEntryDetailModal.tsx(1281,72): error TS7006: Parameter 'i' implicitly has an 'any' type.
+src/components/SampleEntryDetailModal.tsx(1365,14): error TS2304: Cannot find name 'pricingDetail'.
+src/components/SampleEntryDetailModal.tsx(1377,36): error TS2304: Cannot find name 'setPricingDetail'.
+src/components/SampleEntryDetailModal.tsx(1393,51): error TS2304: Cannot find name 'pricingDetail'.
+src/components/SampleEntryDetailModal.tsx(1395,34): error TS2304: Cannot find name 'pricingDetail'.
+src/components/SampleEntryDetailModal.tsx(1398,48): error TS2304: Cannot find name 'pricingDetail'.
+src/components/SampleEntryDetailModal.tsx(1398,85): error TS2304: Cannot find name 'pricingDetail'.
+src/components/SampleEntryDetailModal.tsx(1398,130): error TS2304: Cannot find name 'pricingDetail'.
+src/components/SampleEntryDetailModal.tsx(1402,30): error TS2304: Cannot find name 'pricingDetail'.
+src/components/SampleEntryDetailModal.tsx(1405,58): error TS2304: Cannot find name 'pricingDetail'.
+src/components/SampleEntryDetailModal.tsx(1407,65): error TS2304: Cannot find name 'pricingDetail'.
+src/components/SampleEntryDetailModal.tsx(1408,64): error TS7006: Parameter 'version' implicitly has an 'any' type.
+src/components/SampleEntryDetailModal.tsx(1409,64): error TS7006: Parameter 'version' implicitly has an 'any' type.
+src/components/SampleEntryDetailModal.tsx(1423,63): error TS2304: Cannot find name 'getPricingRows'.
+src/components/SampleEntryDetailModal.tsx(1423,88): error TS2304: Cannot find name 'pricingDetail'.
+src/components/SampleEntryDetailModal.tsx(1428,71): error TS7006: Parameter 'version' implicitly has an 'any' type.
+src/components/SampleEntryDetailModal.tsx(1428,80): error TS7006: Parameter 'versionIndex' implicitly has an 'any' type.
+src/components/SampleEntryDetailModal.tsx(1429,76): error TS2304: Cannot find name 'pricingDetail'.
+src/components/SampleEntryDetailModal.tsx(1461,119): error TS2304: Cannot find name 'pricingDetail'.
+src/components/SampleEntryDetailModal.tsx(1462,66): error TS2304: Cannot find name 'pricingDetail'.
+src/components/SampleEntryDetailModal.tsx(1462,99): error TS2304: Cannot find name 'getOfferSlotLabel'.
+src/components/SampleEntryDetailModal.tsx(1462,150): error TS2304: Cannot find name 'getOfferSlotLabel'.
+src/components/SampleEntryDetailModal.tsx(1464,73): error TS2304: Cannot find name 'getPricingRows'.
+src/components/SampleEntryDetailModal.tsx(1464,144): error TS2304: Cannot find name 'pricingDetail'.
+src/components/SampleEntryDetailModal.tsx(1476,48): error TS2304: Cannot find name 'setPricingDetail'.
+src/components/SampleEntryDetailModal.tsx(1481,54): error TS2304: Cannot find name 'pricingDetail'.
+src/pages/AdminSampleBook.tsx(126,29): error TS2304: Cannot find name 'useMemo'.
+src/pages/AdminSampleBook.tsx(151,39): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/pages/AdminSampleBook.tsx(152,41): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/pages/AdminSampleBook.tsx(153,41): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/pages/AdminSampleBook.tsx(154,40): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/pages/AdminSampleBook.tsx(155,39): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/pages/AdminSampleBook.tsx(156,39): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/pages/AdminSampleBook.tsx(157,43): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/pages/AdminSampleBook.tsx(237,50): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/pages/AdminSampleBook.tsx(237,53): error TS7006: Parameter 'i' implicitly has an 'any' type.
+src/pages/CookingReport.tsx(825,50): error TS18048: 'cr' is possibly 'undefined'.
+src/pages/CookingReport.tsx(983,50): error TS18048: 'cr' is possibly 'undefined'.
+src/pages/LoadingLots.tsx(250,7): error TS18049: 'entry' is possibly 'null' or 'undefined'.
+src/pages/LoadingLots.tsx(250,7): error TS18048: 'entry.cookingReport' is possibly 'undefined'.
+src/pages/LoadingLots.tsx(1742,96): error TS2769: No overload matches this call.
+  Overload 1 of 4, '(value: string | number | Date): Date', gave the following error.
+    Argument of type 'string | undefined' is not assignable to parameter of type 'string | number | Date'.
+      Type 'undefined' is not assignable to type 'string | number | Date'.
+  Overload 2 of 4, '(value: string | number): Date', gave the following error.
+    Argument of type 'string | undefined' is not assignable to parameter of type 'string | number'.
+      Type 'undefined' is not assignable to type 'string | number'.
+src/pages/LoadingLots.tsx(1779,56): error TS7006: Parameter 'row' implicitly has an 'any' type.
+src/pages/LoadingLots.tsx(1779,61): error TS7006: Parameter 'rowIdx' implicitly has an 'any' type.
+src/pages/SampleEntry.tsx(4549,58): error TS2304: Cannot find name 'setRemarksPopup'.

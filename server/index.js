@@ -1620,6 +1620,15 @@ const startServer = async () => {
         console.log('⚠️ Migration 121 warning:', error.message);
       }
 
+      // Migration 122: Add fail remarks to sample entries
+      try {
+        const addFailRemarks = require('./migrations/122_add_fail_remarks_to_sample_entries');
+        await addFailRemarks.up(sequelize.getQueryInterface(), sequelize.Sequelize);
+        console.log('✅ Migration 122: fail remarks added to sample_entries');
+      } catch (error) {
+        console.log('⚠️ Migration 122 warning:', error.message);
+      }
+
     // Default warehouses removed - users should create their own warehouses
 
     // Create default users if they don't exist

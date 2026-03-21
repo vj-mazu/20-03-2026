@@ -3,6 +3,7 @@ import axios from 'axios';
 import { useAuth } from '../contexts/AuthContext';
 import { useNotification } from '../contexts/NotificationContext';
 import ResampleAllotment from './ResampleAllotment';
+import { SampleEntryDetailModal } from '../components/SampleEntryDetailModal';
 
 import { API_URL } from '../config/api';
 
@@ -379,20 +380,22 @@ const getPartyDisplay = (entry: SampleEntry) => {
   if (party) return toTitleCase(party);
   return lorry || '-';
 };
-const getPartyNode = (entry: SampleEntry) => {
+const getPartyNode = (entry: SampleEntry, onClick?: () => void) => {
   const party = (entry.partyName || '').trim();
   const lorry = entry.lorryNumber ? String(entry.lorryNumber).toUpperCase() : '';
-  if (party) {
-    return (
+  const content = party ? (
       <>
         {toTitleCase(party)}
         {entry.entryType === 'DIRECT_LOADED_VEHICLE' && lorry ? (
           <div style={{ fontSize: '12px', color: '#1565c0', fontWeight: 600 }}>{lorry}</div>
         ) : null}
       </>
-    );
-  }
-  return lorry || '-';
+  ) : (lorry || '-');
+  return (
+    <div onClick={onClick} style={{ cursor: 'pointer', textDecoration: 'underline' }}>
+      {content}
+    </div>
+  );
 };
 const formatShortEntryDate = (value?: string | null) => {
   if (!value) return '-';
@@ -561,6 +564,7 @@ const FinalPassLots: React.FC<FinalPassLotsProps> = ({ entryType, excludeEntryTy
   const [loading, setLoading] = useState(false);
   const [showOfferModal, setShowOfferModal] = useState(false);
   const [showFinalPriceModal, setShowFinalPriceModal] = useState(false);
+  const [detailModalEntry, setDetailModalEntry] = useState<SampleEntry | null>(null);
   const [selectedEntry, setSelectedEntry] = useState<SampleEntry | null>(null);
   const [cancelModal, setCancelModal] = useState({ isOpen: false, entryId: null as string | number | null, remarks: '' });
   const [remarksPopup, setRemarksPopup] = useState<{ isOpen: boolean; title: string; text: string }>({ isOpen: false, title: '', text: '' });
@@ -1122,6 +1126,13 @@ const FinalPassLots: React.FC<FinalPassLotsProps> = ({ entryType, excludeEntryTy
 
   return (
     <div>
+      {detailModalEntry && (
+        <SampleEntryDetailModal
+          detailEntry={detailModalEntry}
+          detailMode="history"
+          onClose={() => setDetailModalEntry(null)}
+        />
+      )}
       {!isRiceMode && (
         <div style={{ display: 'flex', gap: '10px', marginBottom: '12px' }}>
           <button
@@ -1351,7 +1362,7 @@ const FinalPassLots: React.FC<FinalPassLotsProps> = ({ entryType, excludeEntryTy
                                     <td style={{ border: '1px solid #000', padding: '3px 4px', textAlign: 'center', fontWeight: '700', whiteSpace: 'nowrap' }}>{rowType}</td>
                                     <td style={{ border: '1px solid #000', padding: '3px 4px', textAlign: 'center', fontWeight: '600', fontSize: '13px', whiteSpace: 'nowrap' }}>{entry.bags?.toLocaleString('en-IN') || '0'}</td>
                                     <td style={{ border: '1px solid #000', padding: '3px 4px', fontSize: '13px', textAlign: 'center', whiteSpace: 'nowrap' }}>{entry.packaging || '-'}</td>
-                                    <td style={{ border: '1px solid #000', padding: '3px 4px', textAlign: 'left', fontSize: '14px', fontWeight: '600', color: '#1565c0', whiteSpace: 'nowrap' }}>{getPartyNode(entry)}</td>
+                                    <td style={{ border: '1px solid #000', padding: '3px 4px', textAlign: 'left', fontSize: '14px', fontWeight: '600', color: '#1565c0', whiteSpace: 'nowrap' }}>{getPartyNode(entry, () => setDetailModalEntry(entry))}</td>
                                     <td style={{ border: '1px solid #000', padding: '3px 4px', textAlign: 'left', fontSize: '13px', whiteSpace: 'nowrap' }}>{toTitleCase(entry.location) || '-'}</td>
                                     <td style={{ border: '1px solid #000', padding: '3px 4px', textAlign: 'left', fontSize: '13px', whiteSpace: 'nowrap' }}>{toTitleCase(entry.variety) || '-'}</td>
                                     <td style={{ border: '1px solid #000', padding: '3px 4px', textAlign: 'left', fontSize: '11px', whiteSpace: 'nowrap' }}>{o?.offerBaseRateValue ? `Rs ${toNumberText(o.offerBaseRateValue)}` : '-'}</td>
@@ -1395,7 +1406,7 @@ const FinalPassLots: React.FC<FinalPassLotsProps> = ({ entryType, excludeEntryTy
                                     <td style={{ border: '1px solid #000', padding: '3px', textAlign: 'center', fontWeight: '700' }}>{rowType}</td>
                                     <td style={{ border: '1px solid #000', padding: '3px', textAlign: 'center', fontWeight: '600' }}>{entry.bags?.toLocaleString('en-IN') || '0'}</td>
                                     <td style={{ border: '1px solid #000', padding: '3px', textAlign: 'center' }}>{entry.packaging || '-'}</td>
-                                    <td style={{ border: '1px solid #000', padding: '3px 5px', textAlign: 'left', fontWeight: '600', color: '#0d47a1' }}>{getPartyNode(entry)}</td>
+                                    <td style={{ border: '1px solid #000', padding: '3px 5px', textAlign: 'left', fontWeight: '600', color: '#0d47a1' }}>{getPartyNode(entry, () => setDetailModalEntry(entry))}</td>
                                     <td style={{ border: '1px solid #000', padding: '3px 5px', textAlign: 'left' }}>{toTitleCase(entry.location) || '-'}</td>
                                     <td style={{ border: '1px solid #000', padding: '3px 5px', textAlign: 'left' }}>{toTitleCase(entry.variety) || '-'}</td>
                                     <td style={{ border: '1px solid #000', padding: '3px 5px', textAlign: 'left' }}>
@@ -2449,6 +2460,14 @@ const FinalPassLots: React.FC<FinalPassLotsProps> = ({ entryType, excludeEntryTy
             </form>
           </div>
         </div>
+      )}
+
+      {detailModalEntry && (
+        <SampleEntryDetailModal
+          detailEntry={detailModalEntry}
+          detailMode="history"
+          onClose={() => setDetailModalEntry(null)}
+        />
       )}
     </div>
   );

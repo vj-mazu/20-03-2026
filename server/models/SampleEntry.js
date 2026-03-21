@@ -277,6 +277,11 @@ const SampleEntry = sequelize.define('SampleEntry', {
     type: DataTypes.TEXT,
     allowNull: true,
     field: 'cancel_remarks'
+  },
+  failRemarks: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+    field: 'fail_remarks'
   }
 }, {
   tableName: 'sample_entries',

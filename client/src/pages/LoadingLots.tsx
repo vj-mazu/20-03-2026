@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { useAuth } from '../contexts/AuthContext';
 import { useNotification } from '../contexts/NotificationContext';
+import { SampleEntryDetailModal } from '../components/SampleEntryDetailModal';
 import { API_URL } from '../config/api';
 
 interface SampleEntry {
@@ -395,6 +396,7 @@ const LoadingLots: React.FC<LoadingLotsProps> = ({ entryType, excludeEntryType }
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState({ broker: '', variety: '', party: '', location: '', startDate: '', endDate: '' });
   const [selectedEntry, setSelectedEntry] = useState<SampleEntry | null>(null);
+  const [detailModalEntry, setDetailModalEntry] = useState<SampleEntry | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [showOfferEditModal, setShowOfferEditModal] = useState(false);
   const [showFinalEditModal, setShowFinalEditModal] = useState(false);
@@ -1033,6 +1035,13 @@ const LoadingLots: React.FC<LoadingLotsProps> = ({ entryType, excludeEntryType }
 
   return (
     <div>
+      {detailModalEntry && (
+        <SampleEntryDetailModal
+          detailEntry={detailModalEntry as any}
+          detailMode="history"
+          onClose={() => setDetailModalEntry(null)}
+        />
+      )}
       <div style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
         <button
           type="button"
@@ -1287,8 +1296,8 @@ const LoadingLots: React.FC<LoadingLotsProps> = ({ entryType, excludeEntryType }
                                       <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                                         <button
                                           type="button"
-                                          onClick={() => hasQualityReport && handleOpenQualityPopup(entry)}
-                                          style={{ background: 'transparent', border: 'none', color: '#1565c0', textDecoration: hasQualityReport ? 'underline' : 'none', cursor: hasQualityReport ? 'pointer' : 'default', fontWeight: 700, fontSize: '14px', padding: 0, textAlign: 'left' }}
+                                          onClick={() => setDetailModalEntry(entry)}
+                                          style={{ background: 'transparent', border: 'none', color: '#1565c0', textDecoration: 'underline', cursor: 'pointer', fontWeight: 700, fontSize: '14px', padding: 0, textAlign: 'left' }}
                                         >
                                           {partyLabel}
                                         </button>
@@ -1326,8 +1335,8 @@ const LoadingLots: React.FC<LoadingLotsProps> = ({ entryType, excludeEntryType }
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                                       <button
                                         type="button"
-                                        onClick={() => hasQualityReport && handleOpenQualityPopup(entry)}
-                                        style={{ background: 'transparent', border: 'none', color: '#1565c0', textDecoration: hasQualityReport ? 'underline' : 'none', cursor: hasQualityReport ? 'pointer' : 'default', fontWeight: 700, fontSize: '13px', padding: 0, textAlign: 'left' }}
+                                        onClick={() => setDetailModalEntry(entry)}
+                                        style={{ background: 'transparent', border: 'none', color: '#1565c0', textDecoration: 'underline', cursor: 'pointer', fontWeight: 700, fontSize: '13px', padding: 0, textAlign: 'left' }}
                                       >
                                         {partyLabel}
                                       </button>

@@ -1,13 +1,6 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { API_URL } from '../config/api';
-import { toast } from '../utils/toast';
-
-/**
- * AdminSampleBook2 — Broker-Grouped Sample Book
- * Same data as AdminSampleBook but rendered in the staff-style
- * broker-grouped design (date bar → red broker bar → table).
- */
 
 interface SampleEntry {
     id: string;
@@ -125,9 +118,9 @@ interface SampleEntry {
             paymentConditionUnit?: string;
         }>;
     };
+    creator?: { username: string };
     staffEntryEditAllowance?: number;
     staffQualityEditAllowance?: number;
-    failRemarks?: string | null;
     entryEditApprovalStatus?: string | null;
     entryEditApprovalReason?: string | null;
     entryEditApprovalRequestedAt?: string | null;
@@ -334,71 +327,43 @@ const getQualityAttemptsForEntry = (entry: any) => {
     return [{ ...currentQuality, attemptNo: 1 }];
 };
 
-interface AdminSampleBook2Props {
-    entryType?: string;
-    excludeEntryType?: string;
-}
 
-type PricingDetailState = {
-    entry: SampleEntry;
-    mode: 'offer' | 'final';
-};
-type SupervisorUser = {
-    id: number;
-    username: string;
-    fullName?: string | null;
-};
 
-const AdminSampleBook2: React.FC<AdminSampleBook2Props> = ({ entryType, excludeEntryType }) => {
-    const isRiceBook = entryType === 'RICE_SAMPLE';
-    const tableMinWidth = isRiceBook ? '100%' : '1500px';
-    const [entries, setEntries] = useState<SampleEntry[]>([]);
-    const [approvalEntries, setApprovalEntries] = useState<SampleEntry[]>([]);
-    const [loading, setLoading] = useState(false);
-    const [supervisors, setSupervisors] = useState<SupervisorUser[]>([]);
-    const [activeView, setActiveView] = useState<'sample-book' | 'edit-approvals'>('sample-book');
+export const SampleEntryDetailModal = ({ detailEntry, detailMode, onClose }) => {
+    const [supervisors, setSupervisors] = useState([]);
+    const [remarksPopup, setRemarksPopup] = useState({ isOpen: false, text: '' });
+    const [pricingDetail, setPricingDetail] = useState<any>(null);
 
-    // Pagination
-    const [page, setPage] = useState(1);
-    const [totalPages, setTotalPages] = useState(1);
-    const [total, setTotal] = useState(0);
-    const PAGE_SIZE = 100;
+    useEffect(() => {
+        const loadSupervisors = async () => {
+            try {
+                const token = localStorage.getItem('token');
+                if (!token) return;
+                const response = await axios.get(`${API_URL}/sample-entries/paddy-supervisors`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                const data = response.data;
+                const users = Array.isArray(data) ? data : (data.users || []);
+                setSupervisors(users.filter(u => u && u.username));
+            } catch (error) {
+                console.error('Error loading supervisors:', error);
+            }
+        };
+        loadSupervisors();
+    }, []);
 
-    // Filters
-    const [filtersVisible, setFiltersVisible] = useState(false);
-    const [filterDateFrom, setFilterDateFrom] = useState('');
-    const [filterDateTo, setFilterDateTo] = useState('');
-    const [filterBroker, setFilterBroker] = useState('');
+    // Override setDetailEntry so the modal can close itself
+    const setDetailEntry = (val) => {
+        if (!val) onClose();
+    };
 
-    // Detail popup
-    const [detailEntry, setDetailEntry] = useState<SampleEntry | null>(null);
-    const [detailMode, setDetailMode] = useState<'summary' | 'history'>('summary');
-    const [pricingDetail, setPricingDetail] = useState<PricingDetailState | null>(null);
-    const [remarksPopup, setRemarksPopup] = useState<{ isOpen: boolean; text: string }>({ isOpen: false, text: '' });
-    const [recheckModal, setRecheckModal] = useState<{ isOpen: boolean; entry: SampleEntry | null }>({ isOpen: false, entry: null });
-    const renderTabBadge = (count: number, background: string) => (
-        count > 0 ? (
-            <span
-                style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    minWidth: '18px',
-                    height: '18px',
-                    marginLeft: '6px',
-                    padding: '0 6px',
-                    borderRadius: '999px',
-                    background,
-                    color: '#fff',
-                    fontSize: '11px',
-                    fontWeight: 800,
-                    lineHeight: 1
-                }}
-            >
-                {count}
-            </span>
-        ) : null
-    );
+    // Need an empty stub for recheckModal or removed buttons?
+    // The popup might render recheck modal if called, but it's only rendered conditionally if recheckModal.isOpen
+    // We can just stub setRecheckModal if the popup JSX tries to call it.
+    const setRecheckModal = () => {
+        console.warn("Recheck is disabled in this detached modal views.");
+    };
+
     const getCollectorLabel = (value?: string | null) => {
         const raw = typeof value === 'string' ? value.trim() : '';
         if (!raw) return '-';
@@ -434,220 +399,8 @@ const AdminSampleBook2: React.FC<AdminSampleBook2Props> = ({ entryType, excludeE
         };
     };
 
-    const handleRecheck = async (type: string) => {
-        if (!recheckModal.entry) return;
-        try {
-            const token = localStorage.getItem('token');
-            const response = await axios.post(`${API_URL}/sample-entries/${recheckModal.entry.id}/recheck`, { recheckType: type }, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            toast.success((response.data as any).message || 'Recheck initiated successfully');
-            setRecheckModal({ isOpen: false, entry: null });
-            loadEntries();
-        } catch (error: any) {
-            console.error('Failed to initiate recheck', error);
-            const msg = error.response?.data?.error || 'Failed to initiate recheck';
-            toast.error(msg);
-        }
-    };
 
-    useEffect(() => {
-        const loadSupervisors = async () => {
-            try {
-                const token = localStorage.getItem('token');
-                const response = await axios.get(`${API_URL}/sample-entries/paddy-supervisors`, {
-                    headers: { Authorization: `Bearer ${token}` }
-                });
-                const data = response.data as any;
-                const users = Array.isArray(data) ? data : (data.users || []);
-                setSupervisors(users.filter((u: any) => u && u.username));
-            } catch (error) {
-                console.error('Error loading supervisors:', error);
-            }
-        };
-        loadSupervisors();
-    }, []);
 
-    useEffect(() => {
-        loadEntries();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [page]);
-
-    useEffect(() => {
-        if (activeView === 'edit-approvals') {
-            loadApprovalEntries();
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [activeView]);
-
-    const loadEntries = async (fFrom?: string, fTo?: string, fBroker?: string) => {
-        try {
-            setLoading(true);
-            const token = localStorage.getItem('token');
-            const params: any = { page, pageSize: PAGE_SIZE };
-
-            const dFrom = fFrom !== undefined ? fFrom : filterDateFrom;
-            const dTo = fTo !== undefined ? fTo : filterDateTo;
-            const b = fBroker !== undefined ? fBroker : filterBroker;
-
-            if (dFrom) params.startDate = dFrom;
-            if (dTo) params.endDate = dTo;
-            if (b) params.broker = b;
-            if (entryType) params.entryType = entryType;
-            if (excludeEntryType) params.excludeEntryType = excludeEntryType;
-
-            const response = await axios.get(`${API_URL}/sample-entries/ledger/all`, {
-                params,
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            const data = response.data as any;
-            setEntries(data.entries || []);
-            if (data.total != null) {
-                setTotal(data.total);
-                setTotalPages(data.totalPages || Math.ceil(data.total / PAGE_SIZE));
-            }
-        } catch (error) {
-            console.error('Failed to load entries', error);
-        } finally {
-            setLoading(false);
-        }
-    };
-    const loadApprovalEntries = async () => {
-        try {
-            setLoading(true);
-            const token = localStorage.getItem('token');
-            const response = await axios.get(`${API_URL}/sample-entries/tabs/edit-approvals`, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            const nextEntries = (response.data as any)?.entries || [];
-            setApprovalEntries(nextEntries);
-        } catch (error) {
-            console.error('Error loading edit approvals:', error);
-            toast.error('Failed to load edit approvals');
-        } finally {
-            setLoading(false);
-        }
-    };
-    const handleApprovalDecision = async (entry: SampleEntry, type: 'entry' | 'quality', decision: 'approve' | 'reject') => {
-        try {
-            const token = localStorage.getItem('token');
-            await axios.post(`${API_URL}/sample-entries/${entry.id}/edit-approval-decision`, { type, decision }, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            toast.success(`${type === 'quality' ? 'Quality' : 'Entry'} edit request ${decision}d`);
-            loadApprovalEntries();
-            loadEntries();
-        } catch (error: any) {
-            toast.error(error.response?.data?.error || 'Failed to update approval request');
-        }
-    };
-
-    const handleApplyFilters = () => {
-        setPage(1);
-        setTimeout(() => {
-            loadEntries();
-        }, 0);
-    };
-
-    const handleClearFilters = () => {
-        setFilterDateFrom('');
-        setFilterDateTo('');
-        setFilterBroker('');
-        setPage(1);
-        setTimeout(() => {
-            loadEntries('', '', '');
-        }, 0);
-    };
-
-    const handleQuickDateFilter = (preset: 'today' | 'yesterday' | 'last7') => {
-        const endDate = new Date();
-        const startDate = new Date(endDate);
-
-        if (preset === 'today') {
-            // keep today only
-        } else if (preset === 'yesterday') {
-            startDate.setDate(startDate.getDate() - 1);
-            endDate.setDate(endDate.getDate() - 1);
-        } else {
-            startDate.setDate(startDate.getDate() - 6);
-        }
-
-        const startValue = formatDateInputValue(startDate);
-        const endValue = formatDateInputValue(endDate);
-        setFilterDateFrom(startValue);
-        setFilterDateTo(endValue);
-        setPage(1);
-        setTimeout(() => {
-            loadEntries(startValue, endValue, filterBroker);
-        }, 0);
-    };
-
-    const filteredEntries = useMemo(() => {
-        if (isRiceBook) {
-            return entries.filter((entry) => {
-                const qp = entry.qualityParameters;
-                const hasQuality = qp && isProvidedNumeric((qp as any).moistureRaw, qp.moisture) && (
-                    isProvidedNumeric((qp as any).cutting1Raw, qp.cutting1)
-                    || isProvidedNumeric((qp as any).bend1Raw, qp.bend1)
-                    || isProvidedAlpha((qp as any).mixRaw, qp.mix)
-                    || isProvidedAlpha((qp as any).mixSRaw, qp.mixS)
-                    || isProvidedAlpha((qp as any).mixLRaw, qp.mixL)
-                    || isProvidedAlpha((qp as any).skRaw, qp.sk)
-                );
-                return !!hasQuality;
-            });
-        }
-
-        return entries.filter((entry) => {
-            const qp = entry.qualityParameters as any;
-            const hasQualityRecord = !!(qp && (qp.reportedBy || qp.id));
-            if (!hasQualityRecord) return true; // Pending entries should show
-            const hasMoisture = qp && isProvidedNumeric(qp.moistureRaw, qp.moisture);
-            const hasGrains = qp && isProvidedNumeric(qp.grainsCountRaw, qp.grainsCount);
-            if (!hasMoisture || !hasGrains) return true; // Pending (partial) shows
-            const hasCutting1 = qp && isProvidedNumeric(qp.cutting1Raw, qp.cutting1);
-            const hasCutting2 = qp && isProvidedNumeric(qp.cutting2Raw, qp.cutting2);
-            const hasBend1 = qp && isProvidedNumeric(qp.bend1Raw, qp.bend1);
-            const hasBend2 = qp && isProvidedNumeric(qp.bend2Raw, qp.bend2);
-            const hasMix = qp && isProvidedAlpha(qp.mixRaw, qp.mix);
-            const hasKandu = qp && isProvidedAlpha(qp.kanduRaw, qp.kandu);
-            const hasOil = qp && isProvidedAlpha(qp.oilRaw, qp.oil);
-            const hasSk = qp && isProvidedAlpha(qp.skRaw, qp.sk);
-            const hasAnyDetail = hasCutting1 || hasCutting2 || hasBend1 || hasBend2 || hasMix || hasKandu || hasOil || hasSk;
-            if (!hasAnyDetail) return true; // 100g completed
-            const isFullQuality = hasCutting1 && hasCutting2 && hasBend1 && hasBend2 && hasMix && hasKandu && hasOil && hasSk;
-            return true; // Pending (partial) shows
-        });
-    }, [entries, isRiceBook]);
-
-    // Get unique brokers
-    const brokersList = useMemo(() => {
-        return Array.from(new Set(filteredEntries.map(e => e.brokerName))).sort();
-    }, [filteredEntries]);
-
-    // Group entries by date then broker
-    const groupedEntries = useMemo(() => {
-        const sorted = [...filteredEntries].sort((a, b) => {
-            const dateA = new Date(a.entryDate).getTime();
-            const dateB = new Date(b.entryDate).getTime();
-            if (dateA !== dateB) return dateB - dateA; // Primary sort: Date DESC
-            const serialA = Number.isFinite(Number(a.serialNo)) ? Number(a.serialNo) : null;
-            const serialB = Number.isFinite(Number(b.serialNo)) ? Number(b.serialNo) : null;
-            if (serialA !== null && serialB !== null && serialA !== serialB) return serialA - serialB;
-            return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(); // Secondary sort: CreatedAt ASC for stable Sl No
-        });
-        const grouped: Record<string, Record<string, typeof sorted>> = {};
-        sorted.forEach(entry => {
-            const dateKey = new Date(entry.entryDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-            const brokerKey = entry.brokerName || 'Unknown';
-            if (!grouped[dateKey]) grouped[dateKey] = {};
-            if (!grouped[dateKey][brokerKey]) grouped[dateKey][brokerKey] = [];
-            grouped[dateKey][brokerKey].push(entry);
-        });
-        return grouped;
-    }, [filteredEntries]);
-
-    // Status badge helper
     const normalizeCookingStatusLabel = (status?: string | null) => {
         const normalized = String(status || '').trim().toUpperCase();
         if (normalized === 'PASS' || normalized === 'OK') return 'Pass';
@@ -963,653 +716,12 @@ const buildQualityStatusRows = (entry: SampleEntry) => {
         setDetailEntry(entry);
     };
 
-    const getWorkflowStatusMeta = (status?: string | null) => {
-        const key = String(status || '').trim().toUpperCase();
-        const colors: Record<string, { bg: string; color: string; label: string }> = {
-            STAFF_ENTRY: { bg: '#fff8e1', color: '#f57f17', label: 'Pending' },
-            QUALITY_CHECK: { bg: '#fff8e1', color: '#e65100', label: 'Pending' },
-            LOT_SELECTION: { bg: '#fff8e1', color: '#f57f17', label: 'Pending' },
-            COOKING_REPORT: { bg: '#fff8e1', color: '#f57f17', label: 'Pending' },
-            FINAL_REPORT: { bg: '#fff8e1', color: '#283593', label: 'Pending' },
-            LOT_ALLOTMENT: { bg: '#fff8e1', color: '#006064', label: 'Pending' },
-            PENDING_ALLOTTING_SUPERVISOR: { bg: '#fff8e1', color: '#880e4f', label: 'Pending' },
-            PHYSICAL_INSPECTION: { bg: '#ffe0b2', color: '#bf360c', label: 'Physical Inspection' },
-            INVENTORY_ENTRY: { bg: '#f1f8e9', color: '#33691e', label: 'Inventory Entry' },
-            COMPLETED: { bg: '#c8e6c9', color: '#1b5e20', label: 'Completed' },
-            CANCELLED: { bg: '#f8bbd0', color: '#880e4f', label: 'Cancelled' },
-            FAILED: { bg: '#e74c3c', color: '#ffffff', label: 'Failed' }
-        };
-        return colors[key] || {
-            bg: '#f5f5f5',
-            color: '#666',
-            label: key ? toTitleCase(key.toLowerCase().replace(/_/g, ' ')) : 'Pending'
-        };
-    };
-
-    const statusBadge = (entry: SampleEntry) => {
-        const qp = entry.qualityParameters as any;
-        const qualityRows = buildQualityStatusRows(entry);
-        const cookingRows = buildCookingStatusRows(entry);
-        const latestQuality = qualityRows.length > 0 ? qualityRows[qualityRows.length - 1] : null;
-        const latestCooking = cookingRows.length > 0 ? cookingRows[cookingRows.length - 1] : null;
-        const hasDetailedQuality = !!(qp
-            && isProvidedNumeric((qp as any).cutting1Raw, qp.cutting1)
-            && isProvidedNumeric((qp as any).cutting2Raw, qp.cutting2)
-            && isProvidedNumeric((qp as any).bend1Raw, qp.bend1)
-            && isProvidedNumeric((qp as any).bend2Raw, qp.bend2)
-            && isProvidedAlpha((qp as any).mixRaw, qp.mix)
-            && isProvidedAlpha((qp as any).kanduRaw, qp.kandu)
-            && isProvidedAlpha((qp as any).oilRaw, qp.oil)
-            && isProvidedAlpha((qp as any).skRaw, qp.sk));
-        const has100GmsOnly = !!(
-            qp
-            && isProvidedNumeric((qp as any).moistureRaw, qp.moisture)
-            && isProvidedNumeric((qp as any).grainsCountRaw, qp.grainsCount)
-            && !hasDetailedQuality
-        );
-        const statusRows: Array<{ label: string; bg: string; color: string }> = [];
-
-        if (entry.lotSelectionDecision === 'SOLDOUT' || (entry.workflowStatus === 'COMPLETED' && (entry.offering?.finalPrice || entry.offering?.finalBaseRate))) {
-            statusRows.push({ label: 'Sold Out', bg: '#800000', color: '#ffffff' });
-        } else if (entry.workflowStatus === 'FAILED' || latestCooking?.status === 'Fail' || latestQuality?.status === 'Fail') {
-            statusRows.push({ label: 'Fail', bg: '#e74c3c', color: '#ffffff' });
-        } else if (entry.lotSelectionDecision === 'FAIL' && entry.workflowStatus !== 'FAILED') {
-            statusRows.push({ label: 'Resample', bg: '#fff3e0', color: '#f57c00' });
-        } else if (
-            entry.lotSelectionDecision === 'PASS_WITHOUT_COOKING'
-            || (entry.lotSelectionDecision === 'PASS_WITH_COOKING' && (latestCooking?.status === 'Pass' || latestCooking?.status === 'Medium'))
-        ) {
-            statusRows.push({ label: has100GmsOnly ? '100-Gms Done' : 'Pass', bg: has100GmsOnly ? '#fff8e1' : '#c8e6c9', color: has100GmsOnly ? '#f57f17' : '#1b5e20' });
-        } else if (latestQuality?.type === '100-Gms') {
-            statusRows.push({ label: '100-Gms Done', bg: '#fff8e1', color: '#f57f17' });
-        } else if (latestQuality?.type === 'Done' && entry.workflowStatus !== 'STAFF_ENTRY') {
-            statusRows.push({ label: 'Pending', bg: '#fff8e1', color: '#f57f17' });
-        } else {
-            statusRows.push(getWorkflowStatusMeta(entry.workflowStatus));
-        }
-
-        if (entry.workflowStatus === 'CANCELLED') {
-            return (
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', width: '100%' }}>
-                    <button
-                        type="button"
-                        onClick={(e) => { 
-                            e.stopPropagation(); 
-                            if (entry.cancelRemarks) {
-                                setRemarksPopup({ isOpen: true, text: `Cancellation Remarks:\n\n${entry.cancelRemarks}` });
-                            }
-                        }}
-                        style={{
-                            fontSize: '9px',
-                            padding: '3px 8px',
-                            borderRadius: '10px',
-                            backgroundColor: '#f8bbd0',
-                            color: '#880e4f',
-                            fontWeight: '800',
-                            lineHeight: '1.2',
-                            whiteSpace: 'normal',
-                            textAlign: 'center',
-                            border: '1px solid #d81b60',
-                            cursor: entry.cancelRemarks ? 'pointer' : 'default',
-                            boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-                        }}
-                    >
-                        Cancelled
-                    </button>
-                </div>
-            );
-        }
-
-        return (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', width: '100%' }}>
-                {statusRows.map((row, idx) => {
-                    const isFailWithRemarks = row.label === 'Fail' && entry.failRemarks;
-                    if (isFailWithRemarks) {
-                        return (
-                            <button
-                                key={`${entry.id}-status-${idx}`}
-                                type="button"
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    setRemarksPopup({ isOpen: true, text: `Fail Remarks:\n\n${entry.failRemarks}` });
-                                }}
-                                style={{
-                                    fontSize: '9px',
-                                    padding: '2px 6px',
-                                    borderRadius: '10px',
-                                    backgroundColor: row.bg,
-                                    color: row.color,
-                                    fontWeight: '700',
-                                    lineHeight: '1.15',
-                                    whiteSpace: 'normal',
-                                    textAlign: 'center',
-                                    border: '1px solid #b71c1c',
-                                    cursor: 'pointer',
-                                    boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-                                }}
-                            >
-                                {row.label} 🔍
-                            </button>
-                        );
-                    }
-                    return (
-                        <span
-                            key={`${entry.id}-status-${idx}`}
-                            style={{
-                                fontSize: '9px',
-                                padding: '2px 6px',
-                                borderRadius: '10px',
-                                backgroundColor: row.bg,
-                                color: row.color,
-                                fontWeight: '700',
-                                lineHeight: '1.15',
-                                whiteSpace: 'normal',
-                                textAlign: 'center'
-                            }}
-                        >
-                            {row.label}
-                        </span>
-                    );
-                })}
-            </div>
-        );
-    };
-
-    const getChargeText = (value?: number, unit?: string) => {
-        if (value === null || value === undefined || Number(value) === 0) return '-';
-        return `${toNumberText(value)} / ${formatToggleUnitLabel(unit)}`;
-    };
-
-    const getOfferRateText = (offering?: SampleEntry['offering']) => {
-        if (!offering) return '-';
-        const rateValue = offering.offerBaseRateValue ?? offering.offeringPrice;
-        if (!rateValue) return '-';
-        const typeText = offering.baseRateType ? offering.baseRateType.replace(/_/g, '/') : '-';
-        return `Rs ${toNumberText(rateValue)} / ${typeText} / ${formatRateUnitLabel(offering.baseRateUnit)}`;
-    };
-    const getOfferSlotLabel = (key?: string | null) => {
-        const match = String(key || '').toUpperCase().match(/(\d+)/);
-        return match ? `Offer ${match[1]}` : 'Offer';
-    };
-    const getLatestOfferVersion = (offering?: SampleEntry['offering']) => {
-        if (!offering) return null;
-        const versions = Array.isArray(offering.offerVersions)
-            ? offering.offerVersions.filter((version) => version?.offerBaseRateValue || version?.offeringPrice)
-            : [];
-        if (versions.length > 0) return versions[versions.length - 1];
-        if (offering.offerBaseRateValue || offering.offeringPrice) {
-            return {
-                key: 'OFFER_1',
-                offerBaseRateValue: offering.offerBaseRateValue,
-                offeringPrice: offering.offeringPrice,
-                baseRateType: offering.baseRateType,
-                baseRateUnit: offering.baseRateUnit
-            };
-        }
-        return null;
-    };
-
-    const getFinalRateText = (offering?: SampleEntry['offering']) => {
-        if (!offering) return '-';
-        const rateValue = offering.finalPrice ?? offering.finalBaseRate;
-        if (!rateValue) return '-';
-        const typeText = offering.baseRateType ? offering.baseRateType.replace(/_/g, '/') : '-';
-        return `Rs ${toNumberText(rateValue)} / ${typeText} / ${formatRateUnitLabel(offering.baseRateUnit)}`;
-    };
-    const getLatestFinalVersion = (offering?: SampleEntry['offering']) => {
-        if (!offering) return null;
-        const versions = Array.isArray(offering.offerVersions)
-            ? offering.offerVersions.filter((version) => version?.finalPrice || version?.finalBaseRate)
-            : [];
-        if (versions.length > 0) return versions[versions.length - 1];
-        if (offering.finalPrice || offering.finalBaseRate) {
-            return {
-                key: 'FINAL',
-                finalPrice: offering.finalPrice,
-                finalBaseRate: offering.finalBaseRate,
-                baseRateType: offering.finalBaseRateType || offering.baseRateType,
-                baseRateUnit: offering.finalBaseRateUnit || offering.baseRateUnit
-            };
-        }
-        return null;
-    };
-
-    const getPricingRows = (offering: NonNullable<SampleEntry['offering']>, mode: 'offer' | 'final') => {
-        const isFinalMode = mode === 'final';
-        const suteValue = isFinalMode ? offering.finalSute : offering.sute;
-        const suteUnit = isFinalMode ? offering.finalSuteUnit : offering.suteUnit;
-
-        return [
-            [isFinalMode ? 'Final Rate' : 'Offer Rate', isFinalMode ? getFinalRateText(offering) : getOfferRateText(offering)],
-            ['Sute', suteValue ? `${toNumberText(suteValue)} / ${formatRateUnitLabel(suteUnit)}` : '-'],
-            ['Moisture', offering.moistureValue ? `${toNumberText(offering.moistureValue)}%` : '-'],
-            ['Hamali', getChargeText(offering.hamali, offering.hamaliUnit)],
-            ['Brokerage', getChargeText(offering.brokerage, offering.brokerageUnit)],
-            ['LF', getChargeText(offering.lf, offering.lfUnit)],
-            ['EGB', offering.egbType === 'mill'
-                ? '0 / Mill'
-                : offering.egbType === 'purchase' && offering.egbValue !== undefined && offering.egbValue !== null
-                    ? `${toNumberText(offering.egbValue)} / Purchase`
-                    : '-'],
-            ['CD', offering.cdEnabled
-                ? offering.cdValue
-                    ? `${toNumberText(offering.cdValue)} / ${formatToggleUnitLabel(offering.cdUnit)}`
-                    : 'Pending'
-                : '-'],
-            ['Bank Loan', offering.bankLoanEnabled
-                ? offering.bankLoanValue
-                    ? `Rs ${formatIndianCurrency(offering.bankLoanValue)} / ${formatToggleUnitLabel(offering.bankLoanUnit)}`
-                    : 'Pending'
-                : '-'],
-            ['Payment', offering.paymentConditionValue
-                ? `${offering.paymentConditionValue} ${offering.paymentConditionUnit === 'month' ? 'Month' : 'Days'}`
-                : '-']
-        ];
-    };
 
 
+    if (!detailEntry) return null;
 
     return (
-        <div>
-            <div style={{ display: 'flex', gap: '10px', marginBottom: '12px', flexWrap: 'wrap' }}>
-                <button
-                    onClick={() => setActiveView('sample-book')}
-                    style={{ padding: '8px 16px', borderRadius: '6px', border: 'none', cursor: 'pointer', fontWeight: '700', fontSize: '13px', background: activeView === 'sample-book' ? '#1565c0' : '#cbd5e1', color: activeView === 'sample-book' ? '#fff' : '#1e293b' }}
-                >
-                    Paddy Sample Book
-                </button>
-                <button
-                    onClick={() => setActiveView('edit-approvals')}
-                    style={{ padding: '8px 16px', borderRadius: '6px', border: 'none', cursor: 'pointer', fontWeight: '700', fontSize: '13px', background: activeView === 'edit-approvals' ? '#7c3aed' : '#cbd5e1', color: activeView === 'edit-approvals' ? '#fff' : '#1e293b' }}
-                >
-                    Approval For Edit
-                    {renderTabBadge(approvalEntries.length, '#6d28d9')}
-                </button>
-            </div>
-            {/* Filter Bar */}
-            <div style={{ marginBottom: '0px' }}>
-                <button onClick={() => setFiltersVisible(!filtersVisible)}
-                    style={{ padding: '7px 16px', backgroundColor: filtersVisible ? '#e74c3c' : '#3498db', color: 'white', border: 'none', borderRadius: '4px', fontSize: '12px', fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    {filtersVisible ? '✕ Hide Filters' : '🔍 Filters'}
-                </button>
-                {filtersVisible && (
-                    <div style={{ display: 'flex', gap: '12px', marginTop: '8px', alignItems: 'flex-end', flexWrap: 'wrap', backgroundColor: '#fff', padding: '10px 14px', borderRadius: '6px', border: '1px solid #e0e0e0' }}>
-                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', marginRight: '4px' }}>
-                            {[
-                                { label: 'Today', value: 'today' as const },
-                                { label: 'Yesterday', value: 'yesterday' as const },
-                                { label: 'Last 7 Days', value: 'last7' as const }
-                            ].map((preset) => (
-                                <button
-                                    key={preset.value}
-                                    type="button"
-                                    onClick={() => handleQuickDateFilter(preset.value)}
-                                    style={{
-                                        padding: '6px 10px',
-                                        borderRadius: '16px',
-                                        border: '1px solid #90caf9',
-                                        background: '#e3f2fd',
-                                        color: '#1565c0',
-                                        fontSize: '12px',
-                                        fontWeight: '700',
-                                        cursor: 'pointer'
-                                    }}
-                                >
-                                    {preset.label}
-                                </button>
-                            ))}
-                        </div>
-                        <div>
-                            <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#555', marginBottom: '3px' }}>From Date</label>
-                            <input type="date" value={filterDateFrom} onChange={e => setFilterDateFrom(e.target.value)} style={{ padding: '5px 8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '12px' }} />
-                        </div>
-                        <div>
-                            <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#555', marginBottom: '3px' }}>To Date</label>
-                            <input type="date" value={filterDateTo} onChange={e => setFilterDateTo(e.target.value)} style={{ padding: '5px 8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '12px' }} />
-                        </div>
-                        <div>
-                            <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#555', marginBottom: '3px' }}>Broker</label>
-                            <select value={filterBroker} onChange={e => setFilterBroker(e.target.value)} style={{ padding: '5px 8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '12px', minWidth: '140px', backgroundColor: 'white' }}>
-                                <option value="">All Brokers</option>
-                                {brokersList.map((b, i) => <option key={i} value={b}>{b}</option>)}
-                            </select>
-                        </div>
-                        {(filterDateFrom || filterDateTo || filterBroker) && (
-                            <div style={{ display: 'flex', gap: '8px' }}>
-                                <button onClick={handleApplyFilters} style={{ padding: '5px 12px', border: 'none', borderRadius: '4px', backgroundColor: '#3498db', color: 'white', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}>Apply</button>
-                                <button onClick={handleClearFilters}
-                                    style={{ padding: '5px 12px', border: '1px solid #e74c3c', borderRadius: '4px', backgroundColor: '#fff', color: '#e74c3c', fontSize: '11px', fontWeight: '600', cursor: 'pointer' }}>
-                                    Clear Filters
-                                </button>
-                            </div>
-                        )}
-                    </div>
-                )}
-            </div>
-
-            {activeView === 'edit-approvals' ? (
-                <div style={{ overflowX: 'auto', backgroundColor: 'white', border: '1px solid #ddd', marginTop: '12px' }}>
-                    {loading ? (
-                        <div style={{ textAlign: 'center', padding: '20px', color: '#666' }}>Loading...</div>
-                    ) : approvalEntries.length === 0 ? (
-                        <div style={{ textAlign: 'center', padding: '20px', color: '#999' }}>No edit approvals pending</div>
-                    ) : (
-                        <table style={{ width: '100%', minWidth: '1100px', borderCollapse: 'collapse' }}>
-                            <thead>
-                                <tr style={{ background: '#1f2a44', color: '#fff' }}>
-                                    {['Sl No', 'Type', 'Bags', 'Pkg', 'Party Name', 'Paddy Location', 'Variety', 'Request', 'Reason', 'Requested By', 'Requested At', 'Action'].map((header) => (
-                                        <th key={header} style={{ border: '1px solid #000', padding: '8px 10px', fontSize: '12px', whiteSpace: 'nowrap', textAlign: 'left', verticalAlign: 'middle' }}>{header}</th>
-                                    ))}
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {approvalEntries.map((entry, index) => {
-                                    const entryPending = String(entry.entryEditApprovalStatus || '').toLowerCase() === 'pending';
-                                    const qualityPending = String(entry.qualityEditApprovalStatus || '').toLowerCase() === 'pending';
-                                    const requestType = qualityPending ? 'Request For Quality Parameters' : 'Request For Sample Entry';
-                                    const requestReason = qualityPending ? (entry.qualityEditApprovalReason || '-') : (entry.entryEditApprovalReason || '-');
-                                    const requestedBy = qualityPending ? (entry.qualityEditApprovalRequestedByName || getCreatorLabel(entry)) : (entry.entryEditApprovalRequestedByName || getCreatorLabel(entry));
-                                    const requestedAt = qualityPending ? entry.qualityEditApprovalRequestedAt : entry.entryEditApprovalRequestedAt;
-                                    const partyDisplay = getPartyDisplayParts(entry);
-                                    return (
-                                        <tr key={`${entry.id}-${requestType}`} style={{ background: index % 2 === 0 ? '#fff7ed' : '#ffffff' }}>
-                                            <td style={{ border: '1px solid #000', padding: '8px 10px', textAlign: 'center', verticalAlign: 'middle', fontWeight: 700 }}>{entry.serialNo || index + 1}</td>
-                                            <td style={{ border: '1px solid #000', padding: '8px 10px', textAlign: 'center', verticalAlign: 'middle', fontWeight: '700' }}>{entry.entryType === 'DIRECT_LOADED_VEHICLE' ? 'RL' : entry.entryType === 'LOCATION_SAMPLE' ? 'LS' : 'MS'}</td>
-                                            <td style={{ border: '1px solid #000', padding: '8px 10px', textAlign: 'center', verticalAlign: 'middle' }}>{entry.bags}</td>
-                                            <td style={{ border: '1px solid #000', padding: '8px 10px', textAlign: 'center', verticalAlign: 'middle' }}>{entry.packaging}</td>
-                                            <td style={{ border: '1px solid #000', padding: '8px 10px', verticalAlign: 'middle', minWidth: '180px' }}>
-                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => openEntryDetail(entry)}
-                                                        style={{ background: 'transparent', border: 'none', color: '#1565c0', textDecoration: 'underline', cursor: 'pointer', fontWeight: 700, fontSize: '13px', padding: 0, textAlign: 'left' }}
-                                                    >
-                                                        {partyDisplay.label}
-                                                    </button>
-                                                    {partyDisplay.showLorrySecondLine ? (
-                                                        <div style={{ fontSize: '12px', color: '#1565c0', fontWeight: 600 }}>{partyDisplay.lorryText}</div>
-                                                    ) : null}
-                                                </div>
-                                            </td>
-                                            <td style={{ border: '1px solid #000', padding: '8px 10px', verticalAlign: 'middle' }}>{toTitleCase(entry.location || '-')}</td>
-                                            <td style={{ border: '1px solid #000', padding: '8px 10px', verticalAlign: 'middle' }}>{toTitleCase(entry.variety || '-')}</td>
-                                            <td style={{ border: '1px solid #000', padding: '8px 10px', textAlign: 'left', verticalAlign: 'middle', fontWeight: '700', color: '#7c3aed', minWidth: '170px' }}>{requestType}</td>
-                                            <td style={{ border: '1px solid #000', padding: '8px 10px', minWidth: '180px', verticalAlign: 'middle', lineHeight: 1.4 }}>{requestReason}</td>
-                                            <td style={{ border: '1px solid #000', padding: '8px 10px', verticalAlign: 'middle' }}>{requestedBy}</td>
-                                            <td style={{ border: '1px solid #000', padding: '8px 10px', whiteSpace: 'nowrap', verticalAlign: 'middle' }}>{formatShortDateTime(requestedAt || null) || '-'}</td>
-                                            <td style={{ border: '1px solid #000', padding: '8px 10px', textAlign: 'center', verticalAlign: 'middle' }}>
-                                                <div style={{ display: 'flex', justifyContent: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                                                    <button onClick={() => handleApprovalDecision(entry, qualityPending ? 'quality' : 'entry', 'approve')} style={{ padding: '5px 10px', border: 'none', borderRadius: '4px', background: '#2e7d32', color: '#fff', cursor: 'pointer', fontWeight: '700' }}>Approve</button>
-                                                    <button onClick={() => handleApprovalDecision(entry, qualityPending ? 'quality' : 'entry', 'reject')} style={{ padding: '5px 10px', border: 'none', borderRadius: '4px', background: '#c62828', color: '#fff', cursor: 'pointer', fontWeight: '700' }}>Reject</button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
-                            </tbody>
-                        </table>
-                    )}
-                </div>
-            ) : null}
-
-            {activeView === 'sample-book' ? (
-            <>
-            {/* Entries grouped by Date → Broker */}
-            <div style={{ overflowX: 'auto', backgroundColor: 'white', border: '1px solid #ddd' }}>
-                {loading ? (
-                    <div style={{ textAlign: 'center', padding: '20px', color: '#666' }}>Loading...</div>
-                ) : Object.keys(groupedEntries).length === 0 ? (
-                    <div style={{ textAlign: 'center', padding: '20px', color: '#999' }}>No entries found</div>
-                ) : (
-                    Object.entries(groupedEntries).map(([dateKey, brokerGroups]) => {
-                        let brokerSeq = 0;
-                        return (
-                            <div key={dateKey} style={{ marginBottom: '20px' }}>
-                                {Object.entries(brokerGroups).sort(([a], [b]) => a.localeCompare(b)).map(([brokerName, brokerEntries], brokerIdx) => {
-                                    let slNo = 0;
-                                    const orderedEntries = [...brokerEntries].sort((a, b) => {
-                                        const serialA = Number.isFinite(Number(a.serialNo)) ? Number(a.serialNo) : null;
-                                        const serialB = Number.isFinite(Number(b.serialNo)) ? Number(b.serialNo) : null;
-                                        if (serialA !== null && serialB !== null && serialA !== serialB) return serialA - serialB;
-                                        return new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime();
-                                    });
-                                    brokerSeq++;
-                                    return (
-                                        <div key={brokerName} style={{ marginBottom: '12px' }}>
-                                            {/* Date + Paddy Sample bar — only first broker */}
-                                            {brokerIdx === 0 && <div style={{
-                                                background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
-                                                color: 'white', padding: '6px 10px', fontWeight: '700', fontSize: '14px',
-                                                textAlign: 'center', letterSpacing: '0.5px', minWidth: tableMinWidth
-                                            }}>
-                                                {(() => { const d = new Date(brokerEntries[0]?.entryDate); return `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}-${d.getFullYear()}`; })()}
-                                                &nbsp;&nbsp;{entryType === 'RICE_SAMPLE' ? 'Rice Sample' : 'Paddy Sample'}
-                                            </div>}
-                                            {/* Broker name bar */}
-                                            <div style={{
-                                                background: '#e8eaf6',
-                                                color: '#000', padding: '3px 10px', fontWeight: '700', fontSize: '12px',
-                                                display: 'flex', alignItems: 'center', gap: '4px', borderBottom: '1px solid #c5cae9', minWidth: tableMinWidth
-                                            }}>
-                                                <span style={{ fontSize: '12px', fontWeight: '800' }}>{brokerSeq}.</span> {toTitleCase(brokerName)}
-                                            </div>
-                                            {/* Table */}
-                                            <table style={{ width: '100%', minWidth: tableMinWidth, borderCollapse: 'collapse', fontSize: '11px', tableLayout: 'fixed', border: '1px solid #000' }}>
-                                                <thead>
-                                                    <tr style={{ backgroundColor: entryType === 'RICE_SAMPLE' ? '#4a148c' : '#1a237e', color: 'white' }}>
-                                                        <th style={{ border: '1px solid #000', padding: '3px 4px', fontWeight: '600', fontSize: '13px', textAlign: 'center', whiteSpace: 'nowrap', width: '3.5%' }}>SL No</th>
-                                                        {!isRiceBook && <th style={{ border: '1px solid #000', padding: '3px 4px', fontWeight: '600', fontSize: '13px', textAlign: 'center', whiteSpace: 'nowrap', width: '4%' }}>Type</th>}
-                                                        <th style={{ border: '1px solid #000', padding: '3px 4px', fontWeight: '600', fontSize: '13px', textAlign: 'center', whiteSpace: 'nowrap', width: '4%' }}>Bags</th>
-                                                        <th style={{ border: '1px solid #000', padding: '3px 4px', fontWeight: '600', fontSize: '13px', textAlign: 'center', whiteSpace: 'nowrap', width: '4%' }}>Pkg</th>
-                                                        <th style={{ border: '1px solid #000', padding: '3px 4px', fontWeight: '600', fontSize: '13px', textAlign: 'left', whiteSpace: 'nowrap', width: '12%' }}>Party Name</th>
-                                                        <th style={{ border: '1px solid #000', padding: '3px 4px', fontWeight: '600', fontSize: '13px', textAlign: 'left', whiteSpace: 'nowrap', width: '12%' }}>{entryType === 'RICE_SAMPLE' ? 'Rice Location' : 'Paddy Location'}</th>
-                                                        <th style={{ border: '1px solid #000', padding: '3px 4px', fontWeight: '600', fontSize: '13px', textAlign: 'left', whiteSpace: 'nowrap', width: '9%' }}>Variety</th>
-                                                        <th style={{ border: '1px solid #000', padding: '3px 4px', fontWeight: '600', fontSize: '13px', textAlign: 'left', whiteSpace: 'nowrap', width: '12%' }}>Sample Collected By</th>
-                                                        <th style={{ border: '1px solid #000', padding: '3px 4px', fontWeight: '600', fontSize: '13px', textAlign: 'left', whiteSpace: 'nowrap', width: '11%' }}>Quality Report</th>
-                                                        <th style={{ border: '1px solid #000', padding: '3px 4px', fontWeight: '600', fontSize: '13px', textAlign: 'center', whiteSpace: 'nowrap', width: isRiceBook ? '12%' : '8.5%' }}>Cooking Report</th>
-                                                        <th style={{ border: '1px solid #000', padding: '3px 4px', fontWeight: '600', fontSize: '13px', textAlign: 'center', whiteSpace: 'nowrap', width: '7%' }}>Offer</th>
-                                                        <th style={{ border: '1px solid #000', padding: '3px 4px', fontWeight: '600', fontSize: '13px', textAlign: 'center', whiteSpace: 'nowrap', width: '6%' }}>Final</th>
-                                                        <th style={{ border: '1px solid #000', padding: '3px 4px', fontWeight: '600', fontSize: '13px', textAlign: 'center', whiteSpace: 'nowrap', width: '8.5%' }}>Status</th>
-                                                        <th style={{ border: '1px solid #000', padding: '3px 4px', fontWeight: '600', fontSize: '13px', textAlign: 'center', whiteSpace: 'nowrap', width: '9%' }}>Action</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    {orderedEntries.map((entry, idx) => {
-                                                        slNo++;
-                                                        const qp = entry.qualityParameters;
-                                                        const cr = entry.cookingReport;
-                                                        const latestOfferVersion = getLatestOfferVersion(entry.offering);
-                                                        const latestFinalVersion = getLatestFinalVersion(entry.offering);
-                                                        const cookingFail = entry.lotSelectionDecision === 'PASS_WITH_COOKING' && cr && cr.status && cr.status.toLowerCase() === 'fail';
-                                                        const cookingStatusKey = String(cr?.status || '').toUpperCase();
-                                                        const isCancelled = entry.workflowStatus === 'CANCELLED';
-                                                        const isResampleRow =
-                                                            entry.lotSelectionDecision === 'FAIL'
-                                                            && entry.workflowStatus !== 'FAILED'
-                                                            && !['PASS', 'MEDIUM'].includes(cookingStatusKey)
-                                                            && !entry.offering?.finalPrice;
-                                                        const rowBg = isCancelled
-                                                            ? '#f8bbd0'
-                                                            : isResampleRow
-                                                                ? '#fff3e0'
-                                                                : cookingFail
-                                                                    ? '#fff0f0'
-                                                                    : entry.entryType === 'DIRECT_LOADED_VEHICLE' ? '#e3f2fd' : entry.entryType === 'LOCATION_SAMPLE' ? '#ffe0b2' : '#ffffff';
-
-                                                        const fallback = entryType === 'RICE_SAMPLE' ? '--' : '-';
-                                                        const fmtVal = (v: any, forceDecimal = false, precision = 2) => {
-                                                            if (v == null || v === '') return fallback;
-                                                            const n = Number(v);
-                                                            if (isNaN(n) || n === 0) return fallback;
-                                                            if (forceDecimal) return n.toFixed(1);
-                                                            if (precision > 2) return String(parseFloat(n.toFixed(precision)));
-                                                            return n % 1 === 0 ? String(Math.round(n)) : String(parseFloat(n.toFixed(2)));
-                                                        };
-                                                        const hasFullQuality = qp && (
-                                                            isProvidedNumeric((qp as any).cutting1Raw, qp.cutting1)
-                                                            || isProvidedNumeric((qp as any).bend1Raw, qp.bend1)
-                                                            || isProvidedAlpha((qp as any).mixRaw, qp.mix)
-                                                            || isProvidedAlpha((qp as any).mixSRaw, qp.mixS)
-                                                            || isProvidedAlpha((qp as any).mixLRaw, qp.mixL)
-                                                        );
-                                                        return (
-                                                            <tr key={entry.id} style={{ backgroundColor: rowBg }}>
-                                                                <td style={{ border: '1px solid #000', padding: '3px 4px', fontSize: '13px', fontWeight: '600', textAlign: 'center', whiteSpace: 'nowrap' }}>{slNo}</td>
-                                                                {!isRiceBook && (
-                                                                    <td style={{ border: '1px solid #000', padding: '3px 4px', fontSize: '13px', fontWeight: '700', textAlign: 'center', whiteSpace: 'nowrap' }}>
-                                                                        {entry.entryType === 'LOCATION_SAMPLE' ? 'LS' : entry.entryType === 'DIRECT_LOADED_VEHICLE' ? 'RL' : 'MS'}
-                                                                    </td>
-                                                                )}
-                                                                <td style={{ border: '1px solid #000', padding: '3px 4px', fontSize: '13px', fontWeight: '700', textAlign: 'center', whiteSpace: 'nowrap' }}>{entry.bags || '0'}</td>
-                                                                <td style={{ border: '1px solid #000', padding: '3px 4px', fontSize: '13px', textAlign: 'center', whiteSpace: 'nowrap' }}>{Number(entry.packaging) === 0 ? 'Loose' : `${entry.packaging || '75'} kg`}</td>
-                                                                <td style={{ border: '1px solid #000', padding: '3px 4px', fontSize: '14px', color: '#1565c0', fontWeight: '600', textAlign: 'left', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                                                    {(() => {
-                                                                        const partyDisplay = getPartyDisplayParts(entry);
-                                                                        return (
-                                                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                                                                                <button
-                                                                                    type="button"
-                                                                                    onClick={() => openEntryDetail(entry)}
-                                                                                    style={{ background: 'transparent', border: 'none', color: '#1565c0', textDecoration: 'underline', cursor: 'pointer', fontWeight: '700', fontSize: '14px', padding: 0, textAlign: 'left' }}
-                                                                                >
-                                                                                    {partyDisplay.label}
-                                                                                </button>
-                                                                                {partyDisplay.showLorrySecondLine ? (
-                                                                                    <div style={{ fontSize: '13px', color: '#1565c0', fontWeight: '600' }}>{partyDisplay.lorryText}</div>
-                                                                                ) : null}
-                                                                            </div>
-                                                                        );
-                                                                    })()}
-                                                                </td>
-                                                                 <td style={{ border: '1px solid #000', padding: '3px 4px', fontSize: '13px', textAlign: 'left', whiteSpace: 'nowrap' }}>
-                                                                    {toTitleCase(entry.location) || '-'}
-                                                                    {entry.entryType === 'LOCATION_SAMPLE' && (entry as any).gpsCoordinates && (() => {
-                                                                        const gps = (entry as any).gpsCoordinates;
-                                                                        const query = typeof gps === 'object' ? `${gps.lat},${gps.lng}` : gps;
-                                                                        return (
-                                                                            <a 
-                                                                                href={`https://www.google.com/maps/search/?api=1&query=${query}`}
-                                                                                target="_blank"
-                                                                                rel="noopener noreferrer"
-                                                                                title="View on Map"
-                                                                                style={{ marginLeft: '4px', textDecoration: 'none', fontSize: '14px' }}
-                                                                            >
-                                                                                📍
-                                                                            </a>
-                                                                        );
-                                                                    })()}
-                                                                </td>
-                                                                <td style={{ border: '1px solid #000', padding: '3px 4px', fontSize: '13px', textAlign: 'left', whiteSpace: 'nowrap' }}>{toTitleCase(entry.variety)}</td>
-                                                                <td style={{ border: '1px solid #000', padding: '3px 4px', fontSize: '13px', textAlign: 'left', whiteSpace: 'nowrap' }}>
-                                                                    {(entry as any).sampleGivenToOffice ? (
-                                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                                                                            <span style={{ fontWeight: '700', color: '#9c27b0', fontSize: '13px' }}>{getCreatorLabel(entry)}</span>
-                                                                            <span style={{ fontWeight: '600', color: '#333', fontSize: '12px' }}>{getCollectorLabel(entry.sampleCollectedBy || '-')}</span>
-                                                                        </div>
-                                                                    ) : (
-                                                                        <span style={{ color: '#333', fontSize: '13px', fontWeight: '600' }}>
-                                                                            {entry.sampleCollectedBy ? getCollectorLabel(entry.sampleCollectedBy) : getCreatorLabel(entry)}
-                                                                        </span>
-                                                                    )}
-                                                                </td>
-                                                                <td style={{ border: '1px solid #000', padding: '3px 4px', textAlign: 'left', whiteSpace: 'nowrap' }}>{qualityBadge(entry)}</td>
-                                                                <td style={{
-                                                                    border: '1px solid #000',
-                                                                    padding: '3px 4px',
-                                                                    fontSize: '11px',
-                                                                    textAlign: isRiceBook ? 'left' : 'center',
-                                                                    whiteSpace: 'normal',
-                                                                    lineHeight: '1.2',
-                                                                    verticalAlign: 'middle',
-                                                                    minWidth: isRiceBook ? undefined : '104px'
-                                                                }}>
-                                                                    {cookingBadge(entry)}
-                                                                </td>
-                                                                <td
-                                                                    onClick={() => latestOfferVersion ? setPricingDetail({ entry, mode: 'offer' }) : null}
-                                                                    style={{ border: '1px solid #000', padding: '3px 4px', fontSize: '11px', textAlign: 'center', whiteSpace: 'normal', wordBreak: 'break-word', overflowWrap: 'anywhere', minWidth: '116px', cursor: latestOfferVersion ? 'pointer' : 'default' }}
-                                                                >
-                                                                    {latestOfferVersion ? (
-                                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1px', alignItems: 'center', width: '100%' }}>
-                                                                            <span style={{ fontSize: '9px', color: '#5f6368', fontWeight: '800' }}>{getOfferSlotLabel((latestOfferVersion as any).key)}</span>
-                                                                            <span style={{ fontWeight: '700', color: '#1565c0', fontSize: '11px' }}>
-                                                                                Rs {toNumberText((latestOfferVersion as any).offerBaseRateValue || (latestOfferVersion as any).offeringPrice || 0)}
-                                                                            </span>
-                                                                            <span style={{ fontSize: '9px', color: '#5f6368', fontWeight: '700', whiteSpace: 'normal', wordBreak: 'break-word', overflowWrap: 'anywhere', lineHeight: '1.2' }}>
-                                                                                {String((latestOfferVersion as any).baseRateType || entry.offering?.baseRateType || '').replace(/_/g, '/')}
-                                                                            </span>
-                                                                        </div>
-                                                                    ) : '-'}
-                                                                </td>
-                                                                <td
-                                                                    onClick={() => latestFinalVersion ? setPricingDetail({ entry, mode: 'final' }) : null}
-                                                                    style={{ border: '1px solid #000', padding: '3px 4px', fontSize: '11px', textAlign: 'center', whiteSpace: 'normal', wordBreak: 'break-word', overflowWrap: 'anywhere', minWidth: '104px', cursor: latestFinalVersion ? 'pointer' : 'default' }}
-                                                                >
-                                                                    {latestFinalVersion ? (
-                                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1px', alignItems: 'center', width: '100%' }}>
-                                                                            <span style={{ fontSize: '9px', color: '#5f6368', fontWeight: '800' }}>{(latestFinalVersion as any).key === 'FINAL' ? 'Final' : getOfferSlotLabel((latestFinalVersion as any).key)}</span>
-                                                                            <span style={{ fontWeight: '700', color: '#2e7d32', fontSize: '11px' }}>
-                                                                                Rs {toNumberText((latestFinalVersion as any).finalPrice || (latestFinalVersion as any).finalBaseRate || 0)}
-                                                                            </span>
-                                                                            <span style={{ fontSize: '9px', color: '#5f6368', fontWeight: '700', whiteSpace: 'normal', wordBreak: 'break-word', overflowWrap: 'anywhere', lineHeight: '1.2' }}>
-                                                                                {String((latestFinalVersion as any).baseRateType || entry.offering?.baseRateType || '').replace(/_/g, '/')}
-                                                                            </span>
-                                                                        </div>
-                                                                    ) : '-'}
-                                                                </td>
-                                                                <td style={{ border: '1px solid #000', padding: '3px 4px', textAlign: 'center', whiteSpace: 'normal', minWidth: '108px' }}>{statusBadge(entry)}</td>
-                                                                <td style={{ border: '1px solid #000', padding: '3px 4px', textAlign: 'center', whiteSpace: 'normal', minWidth: '120px' }}>
-                                                                    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                                                                        <button
-                                                                            type="button"
-                                                                            onClick={() => openEntryDetail(entry)}
-                                                                            style={{ padding: '3px 8px', background: '#3498db', color: 'white', border: 'none', borderRadius: '4px', fontSize: '10px', cursor: 'pointer', fontWeight: '700' }}
-                                                                        >
-                                                                            View
-                                                                        </button>
-                                                                        <button
-                                                                            type="button"
-                                                                            onClick={() => setRecheckModal({ isOpen: true, entry })}
-                                                                            style={{ padding: '3px 8px', background: '#ef6c00', color: 'white', border: 'none', borderRadius: '4px', fontSize: '10px', cursor: 'pointer', fontWeight: '700' }}
-                                                                        >
-                                                                            Recheck
-                                                                        </button>
-                                                                    </div>
-                                                                </td>
-                                                            </tr>
-                                                        );
-                                                    })}
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        );
-                    })
-                )}
-            </div>
-            </>
-            ) : null}
-
-            {/* Recheck Modal */}
-            {recheckModal.isOpen && recheckModal.entry && (
-                <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 10001 }}>
-                    <div style={{ backgroundColor: 'white', borderRadius: '8px', width: '360px', padding: '20px', boxShadow: '0 8px 32px rgba(0,0,0,0.3)' }}>
-                        <h3 style={{ margin: '0 0 16px', fontSize: '16px', fontWeight: '800', color: '#1a237e' }}>Initiate Recheck</h3>
-                        <p style={{ fontSize: '13px', color: '#666', marginBottom: '20px' }}>
-                            Select the type of recheck for <strong>{getPartyLabel(recheckModal.entry)}</strong>:
-                        </p>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                            <button onClick={() => handleRecheck('quality')} style={{ padding: '10px', backgroundColor: '#e67e22', color: 'white', border: 'none', borderRadius: '6px', fontWeight: '700', cursor: 'pointer' }}>Quality Parameters Recheck</button>
-                            <button onClick={() => handleRecheck('cooking')} style={{ padding: '10px', backgroundColor: '#3498db', color: 'white', border: 'none', borderRadius: '6px', fontWeight: '700', cursor: 'pointer' }}>Cooking Report Recheck</button>
-                            <button onClick={() => handleRecheck('both')} style={{ padding: '10px', backgroundColor: '#8e44ad', color: 'white', border: 'none', borderRadius: '6px', fontWeight: '700', cursor: 'pointer' }}>Both (Quality & Cooking)</button>
-                        </div>
-                        <button onClick={() => setRecheckModal({ isOpen: false, entry: null })} style={{ marginTop: '16px', width: '100%', padding: '8px', backgroundColor: '#eee', color: '#666', border: 'none', borderRadius: '6px', fontWeight: '600', cursor: 'pointer' }}>Cancel</button>
-                    </div>
-                </div>
-            )}
-
+        <>
             {/* Detail Popup — same design as AdminSampleBook */}
             {
                 detailEntry && (() => {
@@ -1685,7 +797,7 @@ const buildQualityStatusRows = (entry: SampleEntry) => {
                                             )}
                                             {versions.length > 0 && (
                                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                                                    {versions.map((ov, i) => (
+                                                    {versions.map((ov: any, i: number) => (
                                                         <div key={i} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '10px', minWidth: 0 }}>
                                                             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', gap: '6px' }}>
                                                                 <span style={{ fontSize: '10px', fontWeight: '900', background: '#e0f2fe', color: '#0369a1', padding: '2px 6px', borderRadius: '4px', textTransform: 'uppercase' }}>{ov.key}</span>
@@ -2167,7 +1279,7 @@ const buildQualityStatusRows = (entry: SampleEntry) => {
                                             {/* Offer History */}
                                             {versions.length > 0 && (
                                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '8px' }}>
-                                                    {versions.map((ov, i) => (
+                                                    {versions.map((ov: any, i: number) => (
                                                         <div key={i} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px' }}>
                                                             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
                                                                 <span style={{ fontSize: '10px', fontWeight: '900', background: '#e0f2fe', color: '#0369a1', padding: '2px 6px', borderRadius: '4px' }}>{ov.key}</span>
@@ -2196,7 +1308,8 @@ const buildQualityStatusRows = (entry: SampleEntry) => {
                                         </div>
                                     );
                                 })()}
-                                </>
+                                    
+        </>
                                 )}
 
                                 {/* Cooking History & Remarks */}
@@ -2413,20 +1526,6 @@ const buildQualityStatusRows = (entry: SampleEntry) => {
                     </div>
                 </div>
             )}
-            {/* Pagination */}
-            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '12px', padding: '16px 0', marginTop: '12px' }}>
-                <button disabled={page <= 1} onClick={() => setPage(p => Math.max(1, p - 1))}
-                    style={{ padding: '6px 16px', borderRadius: '4px', border: '1px solid #ccc', background: page <= 1 ? '#eee' : '#fff', cursor: page <= 1 ? 'not-allowed' : 'pointer', fontWeight: '600' }}>
-                    ← Prev
-                </button>
-                <span style={{ fontSize: '13px', color: '#666' }}>Page {page} of {totalPages} &nbsp;({total} total)</span>
-                <button disabled={page >= totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                    style={{ padding: '6px 16px', borderRadius: '4px', border: '1px solid #ccc', background: page >= totalPages ? '#eee' : '#fff', cursor: page >= totalPages ? 'not-allowed' : 'pointer', fontWeight: '600' }}>
-                    Next →
-                </button>
-            </div>
-        </div>
+        </>
     );
 };
-
-export default AdminSampleBook2;

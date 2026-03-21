@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import axios from 'axios';
 
 import { useNotification } from '../contexts/NotificationContext';
+import { SampleEntryDetailModal } from '../components/SampleEntryDetailModal';
 
 import { API_URL } from '../config/api';
 
@@ -188,6 +189,7 @@ const LotSelection: React.FC<LotSelectionProps> = ({ entryType, excludeEntryType
   const [isSubmitting, setIsSubmitting] = useState(false);
   const decisionLocksRef = useRef<Set<string>>(new Set());
   const [detailEntry, setDetailEntry] = useState<SampleEntry | null>(null);
+  const [failModal, setFailModal] = useState<{ isOpen: boolean, entryId: string, remarks: string }>({ isOpen: false, entryId: '', remarks: '' });
   const [remarksModalData, setRemarksModalData] = useState<{ isOpen: boolean, text: string }>({ isOpen: false, text: '' });
   const [supervisors, setSupervisors] = useState<SupervisorUser[]>([]);
   const getCollectorLabel = (value?: string | null) => {
@@ -306,7 +308,7 @@ const LotSelection: React.FC<LotSelectionProps> = ({ entryType, excludeEntryType
     }, 0);
   };
 
-  const handleDecision = async (entryId: string, decision: string) => {
+  const handleDecision = async (entryId: string, decision: string, remarks?: string) => {
     if (isSubmitting) return;
     const lockKey = `${entryId}:${decision}`;
     if (decisionLocksRef.current.has(lockKey)) return;
@@ -316,7 +318,7 @@ const LotSelection: React.FC<LotSelectionProps> = ({ entryType, excludeEntryType
       const token = localStorage.getItem('token');
       await axios.post(
         `${API_URL}/sample-entries/${entryId}/lot-selection`,
-        { decision },
+        { decision, remarks },
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
@@ -646,11 +648,20 @@ const LotSelection: React.FC<LotSelectionProps> = ({ entryType, excludeEntryType
                                       {/^\d+$/.test(String(entry.packaging || '75')) ? `${entry.packaging || '75'} Kg` : entry.packaging || '75'}
                                     </td>
                                     <td style={{ border: '1px solid #000', padding: '2px 3px', textAlign: 'left', verticalAlign: 'middle', fontSize: '12px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: '700', color: '#1f2937' }}>
-                                      {/* Pending and resample-pending should show plain party text, not hyperlink */}
-                                      {entry.entryType === 'DIRECT_LOADED_VEHICLE' && !entry.partyName?.trim() && entry.lorryNumber 
-                                        ? entry.lorryNumber.toUpperCase() 
-                                        : (toTitleCase(entry.partyName) || (entry.lorryNumber?.toUpperCase() || ''))}
-                                      {entry.entryType === 'DIRECT_LOADED_VEHICLE' && entry.partyName?.trim() && entry.lorryNumber ? <div style={{ fontSize: '11px', color: '#555', fontWeight: '600' }}>{entry.lorryNumber.toUpperCase()}</div> : ''}
+                                      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                        <button
+                                          type="button"
+                                          onClick={() => setDetailEntry(entry)}
+                                          style={{ background: 'transparent', border: 'none', color: '#1565c0', textDecoration: 'underline', cursor: 'pointer', fontWeight: 700, fontSize: '12px', padding: 0, textAlign: 'left' }}
+                                        >
+                                          {entry.entryType === 'DIRECT_LOADED_VEHICLE' && !entry.partyName?.trim() && entry.lorryNumber 
+                                          ? entry.lorryNumber.toUpperCase() 
+                                          : (toTitleCase(entry.partyName) || (entry.lorryNumber?.toUpperCase() || ''))}
+                                        </button>
+                                        {entry.entryType === 'DIRECT_LOADED_VEHICLE' && entry.partyName?.trim() && entry.lorryNumber ? (
+                                          <div style={{ fontSize: '11px', color: '#1565c0', fontWeight: '600' }}>{entry.lorryNumber.toUpperCase()}</div>
+                                        ) : null}
+                                      </div>
                                     </td>
                                     <td style={{ border: '1px solid #000', padding: '2px 3px', textAlign: 'left', verticalAlign: 'middle', fontSize: '12px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{toTitleCase(entry.location) || '-'}</td>
                                     <td style={{ border: '1px solid #000', padding: '2px 3px', textAlign: 'left', verticalAlign: 'middle', fontSize: '12px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{toTitleCase(entry.variety)}</td>
@@ -720,7 +731,7 @@ const LotSelection: React.FC<LotSelectionProps> = ({ entryType, excludeEntryType
                                         <button onClick={() => handleDecision(entry.id, 'PASS_WITHOUT_COOKING')} disabled={isSubmitting} style={{ fontSize: '10px', padding: '3px 6px', backgroundColor: isSubmitting ? '#e0e0e0' : '#f39c12', color: isSubmitting ? '#999' : 'white', border: 'none', borderRadius: '4px', cursor: isSubmitting ? 'not-allowed' : 'pointer', fontWeight: '800', boxShadow: '0 1px 2px rgba(0,0,0,0.1)', whiteSpace: 'nowrap' }}>
                                           {isSubmitting ? '...' : '✅ Pass'}
                                         </button>
-                                        <button onClick={() => handleDecision(entry.id, 'FAIL')} disabled={isSubmitting} style={{ fontSize: '10px', padding: '3px 6px', backgroundColor: isSubmitting ? '#e0e0e0' : '#d9534f', color: isSubmitting ? '#999' : 'white', border: 'none', borderRadius: '4px', cursor: isSubmitting ? 'not-allowed' : 'pointer', fontWeight: '800', boxShadow: '0 1px 2px rgba(0,0,0,0.1)', whiteSpace: 'nowrap' }}>
+                                        <button onClick={() => setFailModal({ isOpen: true, entryId: entry.id, remarks: '' })} disabled={isSubmitting} style={{ fontSize: '10px', padding: '3px 6px', backgroundColor: isSubmitting ? '#e0e0e0' : '#d9534f', color: isSubmitting ? '#999' : 'white', border: 'none', borderRadius: '4px', cursor: isSubmitting ? 'not-allowed' : 'pointer', fontWeight: '800', boxShadow: '0 1px 2px rgba(0,0,0,0.1)', whiteSpace: 'nowrap' }}>
                                           {isSubmitting ? '...' : '❌ Fail'}
                                         </button>
                                       </div>
@@ -732,10 +743,18 @@ const LotSelection: React.FC<LotSelectionProps> = ({ entryType, excludeEntryType
                                     <td style={{ border: '1px solid #000', padding: '2px 3px', verticalAlign: 'middle', fontSize: '11px', textAlign: 'center' }}>
                                       {/^\d+$/.test(String(entry.packaging || '26')) ? `${entry.packaging || '26'} Kg` : entry.packaging || '26'}
                                     </td>
-                                     <td style={{ border: '1px solid #000', padding: '2px 3px', textAlign: 'left', verticalAlign: 'middle', fontSize: '12px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: '700', color: '#1f2937' }}>
-                                        {entry.entryType === 'DIRECT_LOADED_VEHICLE' && !entry.partyName?.trim() && entry.lorryNumber
-                                          ? entry.lorryNumber.toUpperCase()
-                                          : (toTitleCase(entry.partyName) || (entry.lorryNumber?.toUpperCase() || ''))}
+                                      <td style={{ border: '1px solid #000', padding: '2px 3px', textAlign: 'left', verticalAlign: 'middle', fontSize: '12px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: '700', color: '#1f2937' }}>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                          <button
+                                            type="button"
+                                            onClick={() => setDetailEntry(entry)}
+                                            style={{ background: 'transparent', border: 'none', color: '#1565c0', textDecoration: 'underline', cursor: 'pointer', fontWeight: 700, fontSize: '12px', padding: 0, textAlign: 'left' }}
+                                          >
+                                            {entry.entryType === 'DIRECT_LOADED_VEHICLE' && !entry.partyName?.trim() && entry.lorryNumber
+                                              ? entry.lorryNumber.toUpperCase()
+                                              : (toTitleCase(entry.partyName) || (entry.lorryNumber?.toUpperCase() || ''))}
+                                          </button>
+                                        </div>
                                       </td>
                                     <td style={{ border: '1px solid #000', padding: '2px 3px', textAlign: 'left', verticalAlign: 'middle', fontSize: '12px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{toTitleCase(entry.location) || '-'}</td>
                                     <td style={{ border: '1px solid #000', padding: '2px 3px', textAlign: 'left', verticalAlign: 'middle', fontSize: '12px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{toTitleCase(entry.variety)}</td>
@@ -804,7 +823,7 @@ const LotSelection: React.FC<LotSelectionProps> = ({ entryType, excludeEntryType
 
                                         const badgeConfig = {
                                           'PASS': { color: '#27ae60', label: 'Passed', icon: '✅' },
-                                          'FAIL': { color: '#8a6400', label: 'Resample', icon: '🔁' },
+                                          'FAIL': { color: '#dc2626', label: 'Resample', icon: '🔁' },
                                           'RECHECK': { color: '#e67e22', label: 'Recheck', icon: '📝' },
                                           'MEDIUM': { color: '#27ae60', label: 'Passed', icon: '✅' },
                                         };
@@ -880,409 +899,13 @@ const LotSelection: React.FC<LotSelectionProps> = ({ entryType, excludeEntryType
         )}
       </div>
 
-      {/* Detail Popup - shows all quality data when clicking party name */}
-      {
-        detailEntry && (
-          <div style={{
-            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-            backgroundColor: 'rgba(0,0,0,0.6)',
-            display: 'flex', justifyContent: 'center', alignItems: 'center',
-            zIndex: 9999
-          }} onClick={() => setDetailEntry(null)}>
-            <div style={{
-              backgroundColor: 'white', borderRadius: '8px', padding: '0',
-              width: '500px', maxWidth: '90vw', maxHeight: '80vh', overflowY: 'auto', overflowX: 'hidden',
-              boxShadow: '0 8px 32px rgba(0,0,0,0.3)'
-            }} onClick={e => e.stopPropagation()}>
-              {/* Redesigned Header — Green Background, Aligned Items */}
-              <div style={{
-                background: detailEntry.entryType === 'DIRECT_LOADED_VEHICLE'
-                  ? '#1565c0'
-                  : detailEntry.entryType === 'LOCATION_SAMPLE'
-                    ? '#e67e22'
-                    : '#4caf50',
-                padding: '16px 20px', borderRadius: '8px 8px 0 0', color: 'white',
-                position: 'relative'
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', marginBottom: '4px' }}>
-                  <div style={{ fontSize: '13px', fontWeight: '800', opacity: 0.9 }}>
-                    {new Date(detailEntry.entryDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' })}
-                  </div>
-                  <div style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', fontSize: '22px', fontWeight: '900', letterSpacing: '1.5px', whiteSpace: 'nowrap' }}>
-                    {detailEntry.entryType === 'DIRECT_LOADED_VEHICLE' ? 'Ready Lorry' : detailEntry.entryType === 'LOCATION_SAMPLE' ? 'Location Sample' : 'Mill Sample'}
-                  </div>
-                </div>
-                <div style={{
-                  fontSize: '24px', fontWeight: '900', letterSpacing: '0.5px', marginTop: '2px',
-                  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '85%'
-                }}>
-                  {toTitleCase(detailEntry.brokerName) || '-'}
-                </div>
-                <button onClick={() => setDetailEntry(null)} style={{
-                  position: 'absolute', top: '16px', right: '16px',
-                  background: 'rgba(255,255,255,0.2)', border: 'none', borderRadius: '50%',
-                  width: '36px', height: '36px', cursor: 'pointer', fontSize: '18px',
-                  color: 'white', fontWeight: '900', display: 'flex', alignItems: 'center',
-                  justifyContent: 'center', transition: 'all 0.2s',
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.2)'
-                }} onMouseOver={e => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.3)'}
-                  onMouseOut={e => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.2)'}>✕</button>
-              </div>
-              <div style={{ padding: '16px 20px' }}>
-                {/* Entry Details — Date, Bags, Pack, Variety, Party, Location, Lorry, Sample Collected By */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', marginBottom: '8px' }}>
-                  {[
-                    ['Date', new Date(detailEntry.entryDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })],
-                    ['Bags', detailEntry.bags?.toLocaleString('en-IN')],
-                    ['Packaging', `${detailEntry.packaging || '75'} Kg`],
-                    ['Variety', detailEntry.variety],
-                  ].map(([label, value], i) => (
-                    <div key={i} style={{ background: '#f8f9fa', padding: '8px 10px', borderRadius: '6px', border: '1px solid #e0e0e0' }}>
-                      <div style={{ fontSize: '10px', color: '#666', marginBottom: '2px', fontWeight: '600' }}>{label}</div>
-                      <div style={{ fontSize: '13px', fontWeight: '700', color: '#2c3e50' }}>{value || '-'}</div>
-                    </div>
-                  ))}
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', marginBottom: '16px' }}>
-                  {[
-                    ['Party Name', toTitleCase(detailEntry.partyName) || (detailEntry.entryType === 'DIRECT_LOADED_VEHICLE' ? detailEntry.lorryNumber?.toUpperCase() : '')],
-                    ['Paddy Location', detailEntry.location],
-                    ['Sample Collected By', (detailEntry as any).sampleGivenToOffice ? (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                        <div style={{ fontWeight: '700', color: '#e65100' }}>{getCreatorLabel(detailEntry)}</div>
-                        <div style={{ fontWeight: '600', color: '#333' }}>{getCollectorLabel(detailEntry.sampleCollectedBy || '-')}</div>
-                      </div>
-                    ) : getCollectorLabel(detailEntry.sampleCollectedBy || getCreatorLabel(detailEntry))],
-                    ['Smell', (() => {
-                      const qualityAttempts = getQualityAttemptsForEntry(detailEntry as any);
-                      const smellAttempt = [...qualityAttempts].reverse().find((attempt: any) => attempt?.smellHas || (attempt?.smellType && String(attempt.smellType).trim()));
-                      const qpSmellHas = smellAttempt?.smellHas ?? (detailEntry as any)?.qualityParameters?.smellHas;
-                      const qpSmellType = smellAttempt?.smellType ?? (detailEntry as any)?.qualityParameters?.smellType;
-                      const entrySmellHas = (detailEntry as any)?.smellHas;
-                      const entrySmellType = (detailEntry as any)?.smellType;
-                      const smellHas = qpSmellHas ?? entrySmellHas;
-                      const smellType = qpSmellType ?? entrySmellType;
-                      if (!smellHas && !(smellType && String(smellType).trim())) return '-';
-                      return toTitleCase(smellType || 'Yes');
-                    })()],
-                  ].map(([label, value], i) => (
-                    <div key={i} style={{ background: '#f8f9fa', padding: '8px 10px', borderRadius: '6px', border: '1px solid #e0e0e0' }}>
-                      <div style={{ fontSize: '10px', color: '#666', marginBottom: '2px', fontWeight: '600' }}>{label}</div>
-                      <div style={{ fontSize: '13px', fontWeight: '700', color: '#2c3e50' }}>{value || '-'}</div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Quality Parameters — grouped rows, hide 0 values */}
-                <h4 style={{ margin: '0 0 10px', fontSize: '13px', color: '#e67e22', borderBottom: '2px solid #e67e22', paddingBottom: '6px' }}>🔬 Quality Parameters</h4>
-                {(() => {
-                  const qpList = getQualityAttemptsForEntry(detailEntry as any);
-                  const fmt = (rawVal: any, numericVal: any, forceDecimal = false, precision = 2) => {
-                    const raw = rawVal != null ? String(rawVal).trim() : '';
-                    if (raw !== '') return raw;
-                    if (numericVal == null || numericVal === '') return null;
-                    const rawNumeric = String(numericVal).trim();
-                    if (!rawNumeric) return null;
-                    const n = Number(rawNumeric);
-                    if (!Number.isFinite(n) || n === 0) return null;
-                    if (forceDecimal) return n.toFixed(precision);
-                    if (entryType === 'RICE_SAMPLE') return n.toFixed(precision);
-                    return rawNumeric;
-                  };
-                  const fmtWhole = (rawVal: any, numericVal: any) => {
-                    const raw = rawVal != null ? String(rawVal).trim() : '';
-                    if (raw !== '') return raw;
-                    if (numericVal == null || numericVal === '') return null;
-                    const rawNumeric = String(numericVal).trim();
-                    if (!rawNumeric) return null;
-                    const n = Number(rawNumeric);
-                    if (!Number.isFinite(n) || n === 0) return null;
-                    return String(Math.round(n));
-                  };
-                  const fmtB = (rawVal: any, numericVal: any, useBrackets = false, isWhole = false) => {
-                    const formatted = isWhole ? fmtWhole(rawVal, numericVal) : fmt(rawVal, numericVal);
-                    return formatted && useBrackets ? `(${formatted})` : formatted;
-                  };
-                  const isProvided = (rawVal: any, numericVal: any) => {
-                    const raw = rawVal != null ? String(rawVal).trim() : '';
-                    if (raw !== '') return true;
-                    if (numericVal == null || numericVal === '') return false;
-                    const rawNumeric = String(numericVal).trim();
-                    if (!rawNumeric) return false;
-                    const n = Number(rawNumeric);
-                    return Number.isFinite(n) && n !== 0;
-                  };
-                  const isEnabled = (flag: any, rawVal: any, numericVal: any) => (
-                    flag === true || (flag == null && isProvided(rawVal, numericVal))
-                  );
-                  const QItem = ({ label, value }: { label: string; value: any }) => {
-                    const isBold = ['Grains Count', 'Paddy WB'].includes(label);
-                    return (
-                      <div style={{ background: '#f8f9fa', padding: '8px 10px', borderRadius: '6px', border: '1px solid #e0e0e0', textAlign: 'center' }}>
-                        <div style={{ fontSize: '11px', color: '#666', marginBottom: '2px', fontWeight: '600' }}>{label}</div>
-                        <div style={{ fontSize: '13px', fontWeight: isBold ? '800' : '700', color: isBold ? '#000' : '#2c3e50' }}>{value || '-'}</div>
-                      </div>
-                    );
-                  };
-                  if (qpList.length === 0) return <div style={{ color: '#999', textAlign: 'center', padding: '12px' }}>No quality data available</div>;
-                  const getAttemptLabel = (attemptNo: number, idx: number) => {
-                    const num = attemptNo || idx + 1;
-                    if (num === 1) return '1st Sample';
-                    if (num === 2) return '2nd Sample';
-                    if (num === 3) return '3rd Sample';
-                    return `${num}th Sample`;
-                  };
-                  const hasCookingHistory = Array.isArray((detailEntry as any).cookingReport?.history)
-                    ? (detailEntry as any).cookingReport.history.filter(Boolean).length > 0
-                    : Boolean((detailEntry as any).cookingReport?.status || (detailEntry as any).cookingReport?.remarks);
-                  if (hasCookingHistory) {
-                    const buildAttemptRows = (qp: any) => {
-                      const smixOn = isEnabled((qp as any).smixEnabled, (qp as any).mixSRaw, qp.mixS);
-                      const lmixOn = isEnabled((qp as any).lmixEnabled, (qp as any).mixLRaw, qp.mixL);
-                      const paddyOn = isEnabled((qp as any).paddyWbEnabled, (qp as any).paddyWbRaw, qp.paddyWb);
-                      const wbOn = isProvided((qp as any).wbRRaw, qp.wbR) || isProvided((qp as any).wbBkRaw, qp.wbBk);
-                      const smellHasVal = (qp as any).smellHas ?? (detailEntry as any).smellHas;
-                      const smellTypeVal = (qp as any).smellType ?? (detailEntry as any).smellType;
-                      return [
-                        [
-                          { label: 'Sample Collected By', value: toSentenceCase(qp.sampleCollectedBy || detailEntry.sampleCollectedBy || '-'), span: 2 },
-                          { label: 'Sample Reported By', value: toSentenceCase(qp.reportedBy || '-'), span: 2 },
-                          { label: 'Reported At', value: formatDateTime(qp.updatedAt || qp.createdAt || null), span: 2 },
-                          { label: 'Moisture', value: (() => {
-                            const dryVal = fmt((qp as any).dryMoistureRaw, (qp as any).dryMoisture, false, 2);
-                            const moistureVal = fmt((qp as any).moistureRaw, qp.moisture, false, 2);
-                            if (!dryVal && !moistureVal) return '--';
-                            return dryVal ? (
-                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1px' }}>
-                                <span style={{ color: '#e67e22', fontWeight: '800', fontSize: '11px' }}>{dryVal}%</span>
-                                <span>{moistureVal}%</span>
-                              </div>
-                            ) : `${moistureVal}%`;
-                          })() },
-                          { label: 'Cutting', value: (() => {
-                            const first = fmt((qp as any).cutting1Raw, qp.cutting1);
-                            const second = fmt((qp as any).cutting2Raw, qp.cutting2);
-                            return first && second ? `${first}x${second}` : '--';
-                          })() },
-                          { label: 'Bend', value: (() => {
-                            const first = fmt((qp as any).bend1Raw, qp.bend1);
-                            const second = fmt((qp as any).bend2Raw, qp.bend2);
-                            return first && second ? `${first}x${second}` : '--';
-                          })() }
-                        ],
-                        [
-                          { label: 'Grains Count', value: fmtB((qp as any).grainsCountRaw, qp.grainsCount, true, true) || '--' },
-                          { label: 'Mix', value: fmtB((qp as any).mixRaw, qp.mix) || '--' },
-                          ...(smixOn ? [{ label: 'S Mix', value: fmtB((qp as any).mixSRaw, qp.mixS) || '--' }] : []),
-                          ...(lmixOn ? [{ label: 'L Mix', value: fmtB((qp as any).mixLRaw, qp.mixL) || '--' }] : []),
-                          { label: 'Kandu', value: fmtB((qp as any).kanduRaw, qp.kandu) || '--' }
-                        ],
-                        [
-                          { label: 'Oil', value: fmtB((qp as any).oilRaw, qp.oil) || '--' },
-                          { label: 'SK', value: fmtB((qp as any).skRaw, qp.sk) || '--' },
-                          ...(wbOn ? [{ label: 'WB-R', value: fmtB((qp as any).wbRRaw, qp.wbR) || '--' }] : []),
-                          ...(wbOn ? [{ label: 'WB-BK', value: fmtB((qp as any).wbBkRaw, qp.wbBk) || '--' }] : []),
-                          { label: 'WB-T', value: fmtB((qp as any).wbTRaw, qp.wbT) || '--' }
-                        ],
-                        paddyOn ? [{ label: 'Paddy WB', value: fmtB((qp as any).paddyWbRaw, qp.paddyWb) || '--', span: 'full' as const }] : [],
-                        smellHasVal || (smellTypeVal && String(smellTypeVal).trim())
-                          ? [{ label: 'Smell', value: toSentenceCase(smellTypeVal || 'Yes'), span: 'full' as const }]
-                          : []
-                      ];
-                    };
-                    return (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
-                        {qpList.map((qp: any, idx: number) => (
-                          <div key={`attempt-${idx}`} style={{ display: 'grid', gridTemplateColumns: '190px minmax(0, 1fr)', gap: '20px', alignItems: 'start' }}>
-                            <div style={{
-                              border: '1px solid #ffb25b',
-                              borderRadius: '14px',
-                              background: '#fff8ee',
-                              color: '#a94400',
-                              fontWeight: '800',
-                              fontSize: '20px',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              minHeight: '96px'
-                            }}>
-                              {getAttemptLabel(qp?.attemptNo, idx)}
-                            </div>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                              {buildAttemptRows(qp).map((row, rowIdx) => (
-                                row.length > 0 ? (
-                                  <div
-                                    key={`${qp.attemptNo || idx}-row-${rowIdx}`}
-                                    style={{
-                                      display: 'grid',
-                                      gridTemplateColumns: row.some((item: any) => item.span === 'full')
-                                        ? 'minmax(0, 1fr)'
-                                        : rowIdx === 0
-                                          ? 'repeat(9, minmax(0, 1fr))'
-                                          : `repeat(${row.length}, minmax(0, 1fr))`,
-                                      gap: '14px'
-                                    }}
-                                  >
-                                    {row.map((item: any, cardIdx: number) => (
-                                      <div
-                                        key={`${qp.attemptNo || idx}-${item.label}-${cardIdx}`}
-                                        style={{
-                                          gridColumn: rowIdx === 0
-                                            ? `span ${item.span || 1}`
-                                            : item.span === 'full'
-                                              ? '1 / -1'
-                                              : undefined
-                                        }}
-                                      >
-                                        <QItem label={item.label} value={item.value} />
-                                      </div>
-                                    ))}
-                                  </div>
-                                ) : null
-                              ))}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    );
-                  }
-                  const qp = qpList[0];
-                  // Row 1: Moisture (with dry moisture), Cutting, Bend, Grains Count
-                  const row1: { label: string; value: any }[] = [];
-                  if (fmt((qp as any).moistureRaw, qp.moisture)) {
-                    const dryVal = fmt((qp as any).dryMoistureRaw, (qp as any).dryMoisture, false, 2);
-                    row1.push({
-                      label: 'Moisture',
-                      value: dryVal ? (
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1px' }}>
-                          <span style={{ color: '#e67e22', fontWeight: '800', fontSize: '11px' }}>{dryVal}%</span>
-                          <span>{fmt((qp as any).moistureRaw, qp.moisture, false, 2)}%</span>
-                        </div>
-                      ) : `${fmt((qp as any).moistureRaw, qp.moisture, false, 2)}%`
-                    });
-                  }
-                  if (qp.cutting1 && qp.cutting2 && (Number(qp.cutting1) !== 0 || Number(qp.cutting2) !== 0)) row1.push({ label: 'Cutting', value: `${fmt((qp as any).cutting1Raw, qp.cutting1)}×${fmt((qp as any).cutting2Raw, qp.cutting2)}` });
-                  if (qp.bend1 && qp.bend2 && (Number(qp.bend1) !== 0 || Number(qp.bend2) !== 0)) row1.push({ label: 'Bend', value: `${fmt((qp as any).bend1Raw, qp.bend1)}×${fmt((qp as any).bend2Raw, qp.bend2)}` });
-                  if (fmtB((qp as any).grainsCountRaw, qp.grainsCount, true, true)) row1.push({ label: 'Grains Count', value: fmtB((qp as any).grainsCountRaw, qp.grainsCount, true, true)! });
-                  // Row 2: Mix, S Mix, L Mix
-                  const row2: { label: string; value: string }[] = [];
-                  if (fmt((qp as any).mixRaw, qp.mix)) row2.push({ label: 'Mix', value: fmtB((qp as any).mixRaw, qp.mix)! });
-                  if (fmt((qp as any).mixSRaw, qp.mixS)) row2.push({ label: 'S Mix', value: fmtB((qp as any).mixSRaw, qp.mixS)! });
-                  if (fmt((qp as any).mixLRaw, qp.mixL)) row2.push({ label: 'L Mix', value: fmtB((qp as any).mixLRaw, qp.mixL)! });
-                  // Row 3: Kandu, Oil, SK — fixed 3-column grid (keep positions even if one is missing)
-                  const hasKandu = fmt((qp as any).kanduRaw, qp.kandu);
-                  const hasOil = fmt((qp as any).oilRaw, qp.oil);
-                  const hasSK = fmt((qp as any).skRaw, qp.sk);
-                  const showRow3 = hasKandu || hasOil || hasSK;
-                  // Row 4: WB-R, WB-BK, WB-T
-                  const row4: { label: string; value: string }[] = [];
-                  if (fmt((qp as any).wbRRaw, qp.wbR)) row4.push({ label: 'WB-R', value: fmtB((qp as any).wbRRaw, qp.wbR)! });
-                  if (fmt((qp as any).wbBkRaw, qp.wbBk)) row4.push({ label: 'WB-BK', value: fmtB((qp as any).wbBkRaw, qp.wbBk)! });
-                  if (fmt((qp as any).wbTRaw, qp.wbT)) row4.push({ label: 'WB-T', value: fmtB((qp as any).wbTRaw, qp.wbT)! });
-                  // Row 5: Paddy WB (own line)
-                  const hasPaddyWb = fmt((qp as any).paddyWbRaw, qp.paddyWb);
-                  return (
-                    <div>
-                      {row1.length > 0 && (
-                        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${row1.length}, 1fr)`, gap: '8px', marginBottom: '8px' }}>
-                          {row1.map(item => <QItem key={item.label} label={item.label} value={item.value} />)}
-                        </div>
-                      )}
-                      {row2.length > 0 && (
-                        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${row2.length}, 1fr)`, gap: '8px', marginBottom: '8px' }}>
-                          {row2.map(item => <QItem key={item.label} label={item.label} value={item.value} />)}
-                        </div>
-                      )}
-                      {showRow3 && (
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', marginBottom: '8px' }}>
-                          {hasKandu ? <QItem label="Kandu" value={fmtB((qp as any).kanduRaw, qp.kandu)!} /> : <div />}
-                          {hasOil ? <QItem label="Oil" value={fmtB((qp as any).oilRaw, qp.oil)!} /> : <div />}
-                          {hasSK ? <QItem label="SK" value={fmtB((qp as any).skRaw, qp.sk)!} /> : <div />}
-                        </div>
-                      )}
-                      {row4.length > 0 && (
-                        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${row4.length}, 1fr)`, gap: '8px', marginBottom: '8px' }}>
-                          {row4.map(item => <QItem key={item.label} label={item.label} value={item.value} />)}
-                        </div>
-                      )}
-                      {hasPaddyWb && (
-                        <div style={{
-                          marginTop: '10px',
-                          background: Number(qp.paddyWb) < 50 ? '#fff5f5' : (Number(qp.paddyWb) <= 50.5 ? '#fff9f0' : '#e8f5e9'),
-                          padding: '8px 10px',
-                          borderRadius: '6px',
-                          border: `1px solid ${Number(qp.paddyWb) < 50 ? '#feb2b2' : (Number(qp.paddyWb) <= 50.5 ? '#fbd38d' : '#c8e6c9')}`,
-                          textAlign: 'center'
-                        }}>
-                          <div style={{ fontSize: '10px', color: Number(qp.paddyWb) < 50 ? '#c53030' : (Number(qp.paddyWb) <= 50.5 ? '#9c4221' : '#2e7d32'), marginBottom: '2px', fontWeight: '600' }}>Paddy WB</div>
-                          <div style={{ fontSize: '13px', fontWeight: '800', color: Number(qp.paddyWb) < 50 ? '#d32f2f' : (Number(qp.paddyWb) <= 50.5 ? '#f39c12' : '#1b5e20') }}>{fmtB((qp as any).paddyWbRaw, qp.paddyWb)}</div>
-                        </div>
-                      )}
-                      {qp.reportedBy && (
-                        <div style={{ marginTop: '8px' }}>
-                          <div style={{ background: '#f8f9fa', padding: '8px 10px', borderRadius: '6px', border: '1px solid #e0e0e0', textAlign: 'center' }}>
-                            <div style={{ fontSize: '10px', color: '#666', marginBottom: '2px', fontWeight: '600' }}>Sample Reported By</div>
-                            <div style={{ fontSize: '13px', fontWeight: '700', color: '#2c3e50' }}>{toSentenceCase(qp.reportedBy)}</div>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })()}
-
-                {/* Final Price Details Section */}
-                {(() => {
-                  const fp = (detailEntry as any).finalPriceData || (detailEntry as any).offering;
-                  if (!fp?.finalPrice && !fp?.finalBaseRate) return null;
-                  const unitLabel = (u: string) => u === 'per_bag' ? 'Per Bag' : u === 'per_quintal' ? 'Per Qtl' : u === 'per_ton' ? 'Per Ton' : '-';
-                  return (
-                    <>
-                      <h4 style={{ margin: '16px 0 10px', fontSize: '13px', color: '#27ae60', borderBottom: '2px solid #27ae60', paddingBottom: '6px' }}>💰 Final Price Details</h4>
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', marginBottom: '8px' }}>
-                        <div style={{ background: '#f0fdf4', padding: '8px 10px', borderRadius: '6px', border: '1px solid #bbf7d0' }}>
-                          <div style={{ fontSize: '10px', color: '#666', marginBottom: '2px', fontWeight: '600', textTransform: 'capitalize' as const }}>Final Rate</div>
-                          <div style={{ fontSize: '13px', fontWeight: '700', color: '#166534' }}>₹{fp.finalPrice || fp.finalBaseRate || '-'} {(fp.baseRateType || '').replace(/_/g, '/')} {unitLabel(fp.baseRateUnit || 'per_bag')}</div>
-                        </div>
-                        <div style={{ background: '#f0fdf4', padding: '8px 10px', borderRadius: '6px', border: '1px solid #bbf7d0' }}>
-                          <div style={{ fontSize: '10px', color: '#666', marginBottom: '2px', fontWeight: '600', textTransform: 'capitalize' as const }}>Sute</div>
-                          <div style={{ fontSize: '13px', fontWeight: '700', color: '#166534' }}>{fp.finalSute || fp.sute || '-'} {unitLabel(fp.finalSuteUnit || fp.suteUnit || 'per_bag')}</div>
-                        </div>
-                        <div style={{ background: '#f0fdf4', padding: '8px 10px', borderRadius: '6px', border: '1px solid #bbf7d0' }}>
-                          <div style={{ fontSize: '10px', color: '#666', marginBottom: '2px', fontWeight: '600', textTransform: 'capitalize' as const }}>Moisture</div>
-                          <div style={{ fontSize: '13px', fontWeight: '700', color: '#166534' }}>{fp.moistureValue || '-'}%</div>
-                        </div>
-                      </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px' }}>
-                        <div style={{ background: '#f0fdf4', padding: '8px 10px', borderRadius: '6px', border: '1px solid #bbf7d0' }}>
-                          <div style={{ fontSize: '10px', color: '#666', marginBottom: '2px', fontWeight: '600', textTransform: 'capitalize' as const }}>Hamali</div>
-                          <div style={{ fontSize: '13px', fontWeight: '700', color: '#166534' }}>{fp.hamaliEnabled !== false ? (fp.hamali || fp.hamaliPerKg || '-') : 'No'} {fp.hamaliEnabled !== false ? unitLabel(fp.hamaliUnit || 'per_bag') : ''}</div>
-                        </div>
-                        <div style={{ background: '#f0fdf4', padding: '8px 10px', borderRadius: '6px', border: '1px solid #bbf7d0' }}>
-                          <div style={{ fontSize: '10px', color: '#666', marginBottom: '2px', fontWeight: '600', textTransform: 'capitalize' as const }}>Brokerage</div>
-                          <div style={{ fontSize: '13px', fontWeight: '700', color: '#166534' }}>{fp.brokerageEnabled !== false ? (fp.brokerage || '-') : 'No'} {fp.brokerageEnabled !== false ? unitLabel(fp.brokerageUnit || 'per_bag') : ''}</div>
-                        </div>
-                        <div style={{ background: '#f0fdf4', padding: '8px 10px', borderRadius: '6px', border: '1px solid #bbf7d0' }}>
-                          <div style={{ fontSize: '10px', color: '#666', marginBottom: '2px', fontWeight: '600', textTransform: 'capitalize' as const }}>LF</div>
-                          <div style={{ fontSize: '13px', fontWeight: '700', color: '#166534' }}>{fp.lfEnabled !== false ? (fp.lf || '-') : 'No'} {fp.lfEnabled !== false ? unitLabel(fp.lfUnit || 'per_bag') : ''}</div>
-                        </div>
-                        <div style={{ background: '#f0fdf4', padding: '8px 10px', borderRadius: '6px', border: '1px solid #bbf7d0' }}>
-                          <div style={{ fontSize: '10px', color: '#666', marginBottom: '2px', fontWeight: '600', textTransform: 'capitalize' as const }}>EGB</div>
-                          <div style={{ fontSize: '13px', fontWeight: '700', color: '#166534' }}>{fp.egbValue || '-'}</div>
-                        </div>
-                      </div>
-                    </>
-                  );
-                })()}
-
-                <button onClick={() => setDetailEntry(null)}
-                  style={{ marginTop: '16px', width: '100%', padding: '8px', backgroundColor: '#e74c3c', color: 'white', border: 'none', borderRadius: '4px', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}>
-                  Close
-                </button>
-              </div>
-            </div>
-          </div>
-        )
-      }
+      {detailEntry && (
+        <SampleEntryDetailModal
+          detailEntry={detailEntry as any}
+          detailMode="history"
+          onClose={() => setDetailEntry(null)}
+        />
+      )}
 
       {/* Remarks Modal */}
       {remarksModalData.isOpen && (
@@ -1344,6 +967,42 @@ const LotSelection: React.FC<LotSelectionProps> = ({ entryType, excludeEntryType
           Next →
         </button>
       </div>
+
+      {/* Fail Modal */}
+      {failModal.isOpen && (
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
+          <div style={{ background: '#fff', padding: '24px', borderRadius: '8px', width: '400px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
+            <h3 style={{ marginTop: 0, marginBottom: '16px', color: '#1f2937' }}>Fail Lot</h3>
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', fontSize: '14px' }}>Reason / Remarks</label>
+              <textarea
+                value={failModal.remarks}
+                onChange={(e) => setFailModal(prev => ({ ...prev, remarks: e.target.value }))}
+                style={{ width: '100%', height: '100px', padding: '8px', border: '1px solid #d1d5db', borderRadius: '4px', resize: 'vertical' }}
+                placeholder="Enter the reason for failing this lot..."
+              />
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+              <button
+                onClick={() => setFailModal({ isOpen: false, entryId: '', remarks: '' })}
+                style={{ padding: '8px 16px', background: '#f3f4f6', border: '1px solid #d1d5db', borderRadius: '4px', cursor: 'pointer', fontWeight: '600' }}
+              >
+                No (Cancel)
+              </button>
+              <button
+                onClick={() => {
+                  handleDecision(failModal.entryId, 'FAIL', failModal.remarks);
+                  setFailModal({ isOpen: false, entryId: '', remarks: '' });
+                }}
+                disabled={!failModal.remarks.trim() || isSubmitting}
+                style={{ padding: '8px 16px', background: '#e74c3c', color: 'white', border: 'none', borderRadius: '4px', cursor: (!failModal.remarks.trim() || isSubmitting) ? 'not-allowed' : 'pointer', fontWeight: '600' }}
+              >
+                Yes (Fail Lot)
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div >
   );
 };
