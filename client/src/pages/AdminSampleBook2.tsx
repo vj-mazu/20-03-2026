@@ -27,6 +27,7 @@ interface SampleEntry {
     lotSelectionDecision?: string;
     lotSelectionAt?: string;
     resampleStartAt?: string;
+    cancelRemarks?: string;
     qualityReportAttempts?: number;
     qualityAttemptDetails?: any[];
     qualityParameters?: {
@@ -248,6 +249,22 @@ const isProvidedAlpha = (rawVal: any, valueVal: any) => {
   const raw = rawVal !== null && rawVal !== undefined ? String(rawVal).trim() : '';
   if (raw !== '') return true;
   return hasAlphaOrPositiveValue(valueVal);
+};
+
+const hasQualitySnapshot = (attempt: any) => {
+  const hasMoisture = isProvidedNumeric(attempt?.moistureRaw, attempt?.moisture);
+  const hasGrains = isProvidedNumeric(attempt?.grainsCountRaw, attempt?.grainsCount);
+  const hasDetailedQuality =
+    isProvidedNumeric(attempt?.cutting1Raw, attempt?.cutting1) ||
+    isProvidedNumeric(attempt?.bend1Raw, attempt?.bend1) ||
+    isProvidedAlpha(attempt?.mixRaw, attempt?.mix) ||
+    isProvidedAlpha(attempt?.mixSRaw, attempt?.mixS) ||
+    isProvidedAlpha(attempt?.mixLRaw, attempt?.mixL) ||
+    isProvidedAlpha(attempt?.kanduRaw, attempt?.kandu) ||
+    isProvidedAlpha(attempt?.oilRaw, attempt?.oil) ||
+    isProvidedAlpha(attempt?.skRaw, attempt?.sk);
+
+  return hasMoisture && (hasGrains || hasDetailedQuality);
 };
 
 const getResampleRoundLabel = (attempts: number) => {

@@ -2548,7 +2548,6 @@ router.post('/:id/cancel', authenticateToken, async (req, res) => {
     res.status(400).json({ error: error.message });
   }
 });
-
 // Create physical inspection (Physical Supervisor)
 router.post('/:id/physical-inspection', authenticateToken, async (req, res) => {
   try {

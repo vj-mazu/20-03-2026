@@ -430,7 +430,7 @@ const getResampleAssignmentTimeline = (entry: any) => {
     pushAssignment(name, date);
   });
   if (normalized.length === 0) {
-    rawHistory.forEach((name) => pushAssignment(name, null));
+    rawHistory.forEach((name: string) => pushAssignment(name, null));
   }
   const currentName = String(entry?.sampleCollectedBy || '').trim();
   if (currentName && !isBrokerOfficeName(currentName) && hasResampleFlow) {
@@ -562,7 +562,7 @@ const FinalPassLots: React.FC<FinalPassLotsProps> = ({ entryType, excludeEntryTy
   const [showOfferModal, setShowOfferModal] = useState(false);
   const [showFinalPriceModal, setShowFinalPriceModal] = useState(false);
   const [selectedEntry, setSelectedEntry] = useState<SampleEntry | null>(null);
-  const [cancelModal, setCancelModal] = useState({ isOpen: false, entryId: null as number | null, remarks: '' });
+  const [cancelModal, setCancelModal] = useState({ isOpen: false, entryId: null as string | number | null, remarks: '' });
   const [remarksPopup, setRemarksPopup] = useState<{ isOpen: boolean; title: string; text: string }>({ isOpen: false, title: '', text: '' });
   const [offeringCache, setOfferingCache] = useState<{ [key: string]: any }>({});
   const isAdmin = (user?.role as string) === 'admin' || (user?.role as string) === 'owner';
@@ -2408,7 +2408,6 @@ const FinalPassLots: React.FC<FinalPassLotsProps> = ({ entryType, excludeEntryTy
           {'Next ->'}
         </button>
       </div>
-
       {/* Cancel Modal */}
       {cancelModal.isOpen && (
         <div style={{

@@ -43,6 +43,7 @@ export interface SampleEntry {
   offeringPrice?: number;
   priceType?: PriceType;
   offeringRemarks?: string;
+  cancelRemarks?: string;
   finalPrice?: number;
   lotSelectionDecision?: 'PASS_WITHOUT_COOKING' | 'PASS_WITH_COOKING' | 'FAIL';
   lotSelectionByUserId?: number;
